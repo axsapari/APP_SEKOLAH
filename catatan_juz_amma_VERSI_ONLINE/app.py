@@ -51,8 +51,8 @@ def add_new_hafalan(student_id, surah_name, ayat_awal, ayat_akhir, status, catat
     # Simpan kedua DataFrame
     if save_dataframes(st.session_state.df_murid, df_new):
         st.toast(f"Catatan hafalan Surah **{surah_name}** ayat {ayat_awal}-{ayat_akhir} berhasil ditambahkan.", icon="✅")
-        time.sleep(1)
-        st.rerun() # Rerun untuk update visualisasi riwayat
+        # Tidak perlu sleep, langsung rerun
+        st.rerun() 
 
 
 def delete_hafalan(hafalan_id):
@@ -245,19 +245,21 @@ def show_manage_student_form():
             
             if st.form_submit_button("Tambahkan Murid"):
                 if nama and kelas and nis:
-                    add_new_student(df_murid.copy(), nama, kelas, nis, nama_wali, kontak_wali)
+                    # Fungsi add_new_student dipanggil dengan df_murid.copy()
+                    add_new_student(st.session_state.df_murid.copy(), nama, kelas, nis, nama_wali, kontak_wali)
                 else:
                     st.error("Nama Murid, Kelas, dan NIS wajib diisi.")
 
     # === TAB 2: UPLOAD CSV MURID ===
     with tab2:
         st.markdown("##### Upload Murid Massal via CSV")
-        st.info("File CSV harus menggunakan pemisah **titik koma (;) atau koma (,)** dan memiliki kolom wajib: `Nama_Murid`, `Kelas`, `NIS`.")
+        st.info("File CSV harus memiliki kolom wajib: `Nama_Murid`, `Kelas`, `NIS`. Mendukung pemisah koma (,) atau titik koma (;).")
         uploaded_file = st.file_uploader("Pilih file CSV Murid", type=['csv'], key="csv_uploader")
         
         if uploaded_file:
             if st.button("Proses dan Tambahkan Murid dari CSV", key="upload_csv_button"):
-                upload_students_csv(uploaded_file, df_murid.copy())
+                # Fungsi upload_students_csv dipanggil dengan df_murid.copy()
+                upload_students_csv(uploaded_file, st.session_state.df_murid.copy())
     
     # === TAB 3: HAPUS MURID ===
     with tab3:
@@ -290,21 +292,34 @@ def show_manage_student_form():
 
         if selected_display_string != 'Pilih Murid yang Akan Dihapus':
             try:
-                # Ekstrak NIS/ID_MURID
-                nis_part = selected_display_string.split(" - NIS: ")[1].split(" (Kelas: ")[0] # Ekstraksi NIS harus disesuaikan jika format string berubah
-                student_id_to_delete = df_filtered_del[df_filtered_del['NIS'] == nis_part]['ID_MURID'].iloc[0]
-                student_name_to_delete = selected_display_string.split(' - Kelas:')[0] 
-                
-                st.error(f"Anda yakin ingin menghapus **{student_name_to_delete}** (NIS: {nis_part}) secara permanen? Semua catatan hafalannya akan ikut terhapus!")
-                
-                if st.button(f"✅ KONFIRMASI HAPUS {student_name_to_delete}", key="confirm_delete_button"):
-                    delete_student(df_murid.copy(), df_hafalan.copy(), student_id_to_delete, student_name_to_delete)
-                    time.sleep(1) 
-                    st.rerun()
-            except IndexError:
-                st.warning("Peringatan: Murid yang dipilih memiliki format data yang tidak lengkap atau NIS tidak ditemukan.")
-            except Exception:
-                 st.warning("Peringatan: Terjadi kesalahan saat mencoba mengidentifikasi murid.")
+                # Ekstrak NIS yang digunakan sebagai kunci unik
+                # Gunakan regex-like split untuk amankan ekstraksi
+                nis_part_raw = selected_display_string.split(" - NIS: ")
+                if len(nis_part_raw) > 1:
+                    nis_part = nis_part_raw[1].split(" (Kelas: ")[0]
+                else:
+                    st.warning("Format display murid tidak sesuai ekspektasi.")
+                    return
+
+                # Pastikan NIS ada dalam DataFrame sebelum mencoba .iloc[0]
+                if nis_part in df_filtered_del['NIS'].astype(str).values:
+                    # Ambil ID_MURID berdasarkan NIS yang ditemukan
+                    student_row = df_filtered_del[df_filtered_del['NIS'].astype(str) == nis_part].iloc[0]
+                    student_id_to_delete = student_row['ID_MURID']
+                    student_name_to_delete = student_row['Nama_Murid']
+                    
+                    st.error(f"Anda yakin ingin menghapus **{student_name_to_delete}** (NIS: {nis_part}) secara permanen? Semua catatan hafalannya akan ikut terhapus!")
+                    
+                    if st.button(f"✅ KONFIRMASI HAPUS {student_name_to_delete}", key="confirm_delete_button"):
+                        # Panggil fungsi delete_student
+                        if delete_student(st.session_state.df_murid.copy(), st.session_state.df_hafalan.copy(), student_id_to_delete, student_name_to_delete):
+                            # Jika berhasil dihapus, force rerun
+                            st.rerun()
+                else:
+                    st.warning("Peringatan: NIS murid tidak ditemukan dalam filter saat ini.")
+            
+            except Exception as e:
+                 st.error(f"Peringatan: Terjadi kesalahan saat mencoba mengidentifikasi murid. {e}")
 
 
 def show_report_table():
@@ -335,10 +350,10 @@ def show_report_table():
         last_note = "-"
         if not df_m.empty:
             df_m_sorted = df_m.sort_values(by='Tanggal', ascending=False)
-            if 'Catatan' in df_m_sorted.columns and not pd.isna(df_m_sorted['Catatan'].iloc[0]):
+            if 'Catatan' in df_m_sorted.columns:
                  # Ambil catatan dari baris pertama yang mungkin bukan string kosong
                  for note in df_m_sorted['Catatan']:
-                     if note != '':
+                     if pd.notna(note) and note.strip() != '':
                          last_note = note
                          break
                  
@@ -487,17 +502,28 @@ def render_student_selection():
     else:
         # Ekstrak NIS/ID_MURID dari string yang dipilih
         try:
-            nis_part = selected_murid_display.split(" - NIS: ")[1].split(" (Kelas: ")[0]
-            student_id = df_filtered[df_filtered['NIS'] == nis_part]['ID_MURID'].iloc[0]
-            student_name = selected_murid_display.split(" - NIS: ")[0]
+            nis_part_raw = selected_murid_display.split(" - NIS: ")
+            if len(nis_part_raw) > 1:
+                nis_part = nis_part_raw[1].split(" (Kelas: ")[0]
+            else:
+                st.sidebar.warning("Format display murid tidak sesuai ekspektasi.")
+                return
+
+            # Cek di DataFrame
+            student_row = df_filtered[df_filtered['NIS'].astype(str) == nis_part].iloc[0]
+            
+            student_id = student_row['ID_MURID']
+            student_name = student_row['Nama_Murid']
             
             st.session_state.selected_student_id = student_id
             st.session_state.selected_student_name = student_name
             
             st.sidebar.markdown(f"**Murid Aktif:** {student_name}")
             st.sidebar.markdown(f"**NIS:** {nis_part}")
-        except Exception:
-             st.sidebar.error("Gagal memilih murid. Data mungkin tidak lengkap.")
+        except IndexError:
+             st.sidebar.error("Gagal memilih murid. Data murid mungkin tidak lengkap atau NIS tidak ditemukan.")
+        except Exception as e:
+             st.sidebar.error(f"Gagal memilih murid: {e}")
 
 
 # --- APLIKASI UTAMA ---
