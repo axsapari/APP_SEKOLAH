@@ -110,6 +110,10 @@ def upload_students_csv(uploaded_file, df_murid_copy):
         # PENTING: Menggunakan delimiter ';' karena data yang diunggah sebelumnya menggunakan ';'
         df_upload = pd.read_csv(uploaded_file, sep=';')
         
+        # --- PERBAIKAN: Hapus spasi/karakter tak terlihat dari nama kolom ---
+        # Ini mengatasi masalah di mana 'Nama_Murid' dibaca sebagai ' Nama_Murid' atau 'Nama_Murid\ufeff'
+        df_upload.columns = df_upload.columns.str.strip()
+        
         # 1. Pastikan kolom wajib ada
         required_cols = ['Nama_Murid', 'Kelas', 'NIS']
         for col in required_cols:
@@ -153,9 +157,9 @@ def upload_students_csv(uploaded_file, df_murid_copy):
                 success_msg += f" ({duplicates_count} murid dilewati karena NIS/ID duplikat)."
             
             st.success(success_msg)
-            # FIX ERROR: Mengganti st.experimental_rerun() ke st.rerun()
             st.rerun() 
             
     except Exception as e:
-        st.error(f"Gagal memproses file CSV. Pastikan format delimiter (';') dan kolom wajib benar: {e}")
+        # Pesan error yang lebih informatif
+        st.error(f"Gagal memproses file CSV. Pastikan format delimiter (';') dan kolom wajib (Nama_Murid, Kelas, NIS) benar. Detail error: {e}")
         print(f"Error detail during CSV upload: {e}")
