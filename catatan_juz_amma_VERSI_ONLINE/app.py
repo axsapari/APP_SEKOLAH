@@ -5,12 +5,13 @@ from datetime import datetime
 import time
 import os
 import uuid 
+import inspect # Import library inspect untuk pengecekan tipe
 
-# Import data master dan fungsi pembantu dari file juz_amma_data.py
-# PASTIKAN FILE juz_amma_data.py ADA DI FOLDER YANG SAMA
+# --- PASTIKAN SEMUA FILE INI ADA DI FOLDER YANG SAMA ---
+# 1. juz_amma_data.py: Berisi JUZ_AMMA_MAP, SURAH_NAMES, dll.
 from juz_amma_data import JUZ_AMMA_MAP, SURAH_NAMES, TOTAL_AYAT_JUZ_AMMA, calculate_lulus_count
 
-# Import semua fungsi manajemen data dari file terpisah
+# 2. student_management.py: Berisi fungsi-fungsi CRUD CSV dan inisialisasi file.
 from student_management import (
     initialize_csv_files, 
     load_data_to_session_state, 
@@ -19,6 +20,7 @@ from student_management import (
     upload_students_csv,
     save_dataframes
 )
+# --------------------------------------------------------
 
 # --- KONFIGURASI APLIKASI ---
 st.set_page_config(
@@ -53,7 +55,7 @@ def add_hafalan(student_id, surah_name, ayat_awal, ayat_akhir, status, catatan):
     # Simpan kedua DataFrame
     if save_dataframes(df_murid, df_new_hafalan):
         st.success(f"Catatan hafalan **{surah_name}** berhasil ditambahkan.")
-        st.experimental_rerun()
+        st.rerun() # Menggunakan st.rerun()
 
 
 # --- FUNGSI DISPLAY ---
@@ -66,24 +68,28 @@ def show_main_dashboard(df_murid, df_hafalan):
     # Tombol Unduh Data
     st.markdown("---")
     st.subheader("Data Lokal (CSV)")
-    st.info("Data disimpan di file **data_murid.csv** dan **data_hafalan.csv** di repositori Anda.")
+    st.info("Data disimpan di file **data_murid.csv** dan **data_hafalan.csv** di folder aplikasi Anda. Pastikan file ini tidak hilang!")
     
     col_dl1, col_dl2 = st.columns(2)
     
+    # Membuat tombol download untuk data murid
     csv_murid = df_murid.to_csv(index=False).encode('utf-8')
     col_dl1.download_button(
         label="📥 Unduh Data Murid (CSV)",
         data=csv_murid,
         file_name='data_murid_export.csv',
         mime='text/csv',
+        key="dl_murid"
     )
     
+    # Membuat tombol download untuk data hafalan
     csv_hafalan = df_hafalan.to_csv(index=False).encode('utf-8')
     col_dl2.download_button(
         label="📥 Unduh Data Hafalan (CSV)",
         data=csv_hafalan,
         file_name='data_hafalan_export.csv',
         mime='text/csv',
+        key="dl_hafalan"
     )
     st.markdown("---")
     
@@ -157,22 +163,45 @@ def show_add_hafalan_form():
     """Menampilkan form untuk mencatat hafalan baru."""
     df_murid = st.session_state.df_murid
     
+    # Menggabungkan Nama dan Kelas untuk tampilan yang lebih informatif
     murid_options = df_murid[['Nama_Murid', 'Kelas', 'ID_MURID']].apply(
         lambda x: f"{x['Nama_Murid']} - Kelas: {x['Kelas']} |ID:{x['ID_MURID']}", axis=1).tolist()
     
-    selected_murid_display = st.selectbox("Pilih Murid", ["Pilih Murid..."] + murid_options)
+    # Selector Murid
+    selected_murid_display = st.selectbox("Pilih Murid", ["Pilih Murid..."] + murid_options, key="murid_picker")
     
     if selected_murid_display != "Pilih Murid...":
-        student_id = selected_murid_display.split('|ID:')[1]
-        
-        st.markdown(f"**Murid Terpilih:** {selected_murid_display.split(' |ID:')[0]}")
-        
+        # Ekstraksi ID Murid
+        try:
+            student_id = selected_murid_display.split('|ID:')[1]
+            st.markdown(f"**Murid Terpilih:** {selected_murid_display.split(' |ID:')[0]}")
+        except IndexError:
+             st.error("Format data ID murid tidak valid. Harap periksa data_murid.csv.")
+             return
+
+
+        # --- Input Hafalan ---
         col_s, col_e = st.columns(2)
         surah_name = col_s.selectbox("Surah", SURAH_NAMES, key="surah_select")
         
-        max_ayat = JUZ_AMMA_MAP.get(surah_name, {}).get('ayat_count', 1)
+        # PERBAIKAN DI SINI: Menambahkan pengecekan tipe ganda 
+        # untuk mengatasi error "AttributeError" yang disebabkan oleh inkonsistensi status Streamlit.
+        if isinstance(JUZ_AMMA_MAP, dict):
+            # Coba ambil data, default ke dict kosong jika Surah tidak ada
+            surah_data = JUZ_AMMA_MAP.get(surah_name, {})
+            # Ambil jumlah ayat, default ke 1 jika data 'ayat_count' tidak ada
+            max_ayat = surah_data.get('ayat_count', 1) 
+        else:
+             # Fallback yang aman jika JUZ_AMMA_MAP gagal diimpor sebagai dict
+            max_ayat = 1
+            st.warning("Peringatan: Data master Surah tidak dapat diakses. Mohon tunggu atau muat ulang aplikasi.")
         
+        # Tampilkan rentang ayat (informasi)
+        st.caption(f"Rentang Ayat Tersedia untuk Surah {surah_name}: 1 sampai {max_ayat}")
+
+        # Input Ayat
         ayat_awal = col_s.number_input("Ayat Awal", min_value=1, max_value=max_ayat, value=1, key="ayat_awal_input")
+        # Sesuaikan min_value Ayat Akhir berdasarkan Ayat Awal yang dipilih
         ayat_akhir = col_e.number_input("Ayat Akhir", min_value=ayat_awal, max_value=max_ayat, value=ayat_awal, key="ayat_akhir_input")
         status = col_e.selectbox("Status", ["LULUS", "MENGULANG", "MENGULANG (LALAI)"], key="status_select")
         
@@ -192,6 +221,7 @@ def show_manage_student_form():
     
     st.header("👤 Manajemen Data Murid")
     
+    # Tabs / Radio Button
     sub_tab = st.radio("Pilih Aksi", ["Tambah Murid Manual", "Upload Data CSV", "Hapus Murid"], horizontal=True)
     
     if sub_tab == "Tambah Murid Manual":
@@ -233,6 +263,7 @@ def show_manage_student_form():
              st.info("Tidak ada murid yang bisa dihapus.")
              return
              
+        # Sortir untuk tampilan yang lebih baik
         df = df_murid.sort_values(by=['Kelas', 'Nama_Murid'])
         
         # Buat peta unik untuk selector
@@ -251,7 +282,7 @@ def show_manage_student_form():
         
         if selected_display_string != 'Pilih Murid yang Akan Dihapus':
             student_id_to_delete = internal_delete_map.get(selected_display_string)
-            student_name_to_delete = selected_display_string.split(' - Kelas:')[0] 
+            student_name_to_delete = selected_display_string.split(' - Kelas:')[0].split(' - Kelas:')[0] # Ambil nama
 
             st.error(f"Anda yakin ingin menghapus **{student_name_to_delete}** (ID: {student_id_to_delete}) secara permanen? Semua data hafalannya akan ikut terhapus!")
             
@@ -265,23 +296,24 @@ def show_manage_student_form():
 
 def main():
     
-    # Inisialisasi file CSV jika belum ada (membuat file kosong)
+    # 1. Inisialisasi file CSV (membuat file kosong jika belum ada)
     initialize_csv_files()
 
-    # Memuat data dari CSV ke Streamlit Session State
+    # 2. Memuat data dari CSV ke Streamlit Session State
     load_data_to_session_state()
 
-    # Ambil data dari session state
+    # 3. Ambil data dari session state
     df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
     
-    # Logic Sidebar dan Tabs
+    # 4. Logic Sidebar dan Tabs
     st.sidebar.title("Navigasi")
     
     tab_list = ["Dashboard", "Input Hafalan", "Manajemen Murid"]
     selected_tab = st.sidebar.radio("Pilih Halaman", tab_list)
 
     if selected_tab == "Dashboard":
+        # Tampilkan dashboard hanya jika df_murid tidak kosong
         if not df_murid.empty:
             show_main_dashboard(df_murid, df_hafalan)
         else:
