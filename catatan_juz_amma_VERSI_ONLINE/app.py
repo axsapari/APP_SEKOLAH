@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 import uuid 
 import time
-import io
+import numpy as np
 
 # Import data master dari juz_amma_data.py
 # PASTIKAN FILE juz_amma_data.py ADA DI FOLDER YANG SAMA
@@ -41,7 +41,8 @@ def add_new_hafalan(student_id, surah_name, ayat_awal, ayat_akhir, status, catat
         'Surah': surah_name,
         'Ayat_Awal': ayat_awal,
         'Ayat_Akhir': ayat_akhir,
-        'Status': status,
+        # Status hanya Hafal atau Mengulang
+        'Status': status, 
         'Catatan': catatan
     }])
 
@@ -49,9 +50,71 @@ def add_new_hafalan(student_id, surah_name, ayat_awal, ayat_akhir, status, catat
     
     # Simpan kedua DataFrame
     if save_dataframes(st.session_state.df_murid, df_new):
-        st.success(f"Catatan hafalan Surah **{surah_name}** berhasil ditambahkan.")
+        st.toast(f"Catatan hafalan Surah **{surah_name}** ayat {ayat_awal}-{ayat_akhir} berhasil ditambahkan.", icon="✅")
+        time.sleep(1)
+        # st.rerun() # Tidak perlu rerun, toast sudah cukup
+
+def process_ayat_details(student_id, surah_name, ayat_count, status_data, catatan_global):
+    """Memproses detail status per ayat dan menambahkannya sebagai catatan hafalan."""
+    df_hafalan = st.session_state.df_hafalan.copy()
+    
+    records_to_add = []
+    
+    # Kelompokkan ayat-ayat yang berdekatan dengan status yang sama
+    current_status = None
+    start_ayat = None
+    
+    for i in range(1, ayat_count + 1):
+        status = status_data[f'ayat_{i}']
+        
+        if status != current_status:
+            # Jika status berubah atau ini adalah awal
+            if current_status is not None:
+                # Simpan blok sebelumnya
+                records_to_add.append({
+                    'ID_HAFALAN': str(uuid.uuid4()),
+                    'ID_MURID': student_id,
+                    'Tanggal': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'Surah': surah_name,
+                    'Ayat_Awal': start_ayat,
+                    'Ayat_Akhir': i - 1, # Ayat sebelumnya adalah akhir blok
+                    'Status': current_status,
+                    'Catatan': catatan_global # Catatan digunakan untuk seluruh blok
+                })
+            
+            # Mulai blok baru
+            current_status = status
+            start_ayat = i
+
+        # Jika ini adalah ayat terakhir, simpan blok saat ini
+        if i == ayat_count:
+            if current_status is not None:
+                 records_to_add.append({
+                    'ID_HAFALAN': str(uuid.uuid4()),
+                    'ID_MURID': student_id,
+                    'Tanggal': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'Surah': surah_name,
+                    'Ayat_Awal': start_ayat,
+                    'Ayat_Akhir': ayat_count,
+                    'Status': current_status,
+                    'Catatan': catatan_global
+                })
+
+
+    if not records_to_add:
+        st.warning("Tidak ada ayat yang dipilih, atau semua ayat dibiarkan kosong.")
+        return
+
+    # Gabungkan catatan baru
+    df_new_records = pd.DataFrame(records_to_add)
+    df_new = pd.concat([df_hafalan, df_new_records], ignore_index=True)
+
+    # Simpan kedua DataFrame
+    if save_dataframes(st.session_state.df_murid, df_new):
+        st.success(f"Catatan detail hafalan Surah **{surah_name}** berhasil disimpan.")
         time.sleep(1)
         st.rerun()
+
 
 def delete_hafalan(hafalan_id):
     """Menghapus catatan hafalan berdasarkan ID."""
@@ -64,80 +127,96 @@ def delete_hafalan(hafalan_id):
 
 # --- FUNGSI TAMPILAN (VIEW) ---
 
-def show_add_hafalan_form():
-    """Tampilkan form untuk input hafalan baru."""
-    st.header("📝 INPUT HAFALAN")
+def show_add_hafalan_form(student_id, student_name):
+    """Tampilkan form untuk input hafalan baru dengan detail per ayat."""
+    st.header("📝 INPUT HAFALAN DETAIL")
     
-    df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
-
-    if df_murid.empty:
-        st.warning("Data murid kosong. Silakan tambahkan murid di menu 'MANAJEMEN MURID'.")
-        return
-
-    # 1. Ambil daftar kelas unik untuk filter
-    unique_kelas = sorted(df_murid['Kelas'].unique().tolist())
-    kelas_filter = st.selectbox("Filter Siswa Berdasarkan Kelas", ["Semua Kelas"] + unique_kelas, key="kelas_filter_input")
-
-    # 2. Filter murid berdasarkan kelas
-    if kelas_filter != "Semua Kelas":
-        df_filtered = df_murid[df_murid['Kelas'] == kelas_filter]
-    else:
-        df_filtered = df_murid
-        
-    # 3. Buat daftar murid untuk selectbox (Nama - NIS)
-    murid_options = ['Pilih Murid'] + sorted([
-        f"{row['Nama_Murid']} - NIS: {row['NIS']} (Kelas: {row['Kelas']})"
-        for index, row in df_filtered.iterrows()
-    ])
     
-    selected_murid_display = st.selectbox("Pilih Murid", murid_options, key="select_student_hafalan")
-
-    # Cek apakah murid valid dipilih
-    if selected_murid_display == 'Pilih Murid':
-        student_id = None
-        student_name = None
-    else:
-        # Ekstrak NIS/ID_MURID dari string yang dipilih
-        nis_part = selected_murid_display.split(" - NIS: ")[1].split(" (Kelas: ")[0]
-        student_id = nis_part
-        student_name = selected_murid_display.split(" - NIS: ")[0]
-
-
-    with st.form("hafalan_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            surah_name = st.selectbox("Surah", SURAH_NAMES, index=0, key="surah_select")
+    # 1. Pilih Surah (di luar form utama untuk kemudahan interaksi)
+    selected_surah = st.selectbox("Pilih Surah", SURAH_NAMES, index=SURAH_NAMES.index("An-Nas"), key="surah_select")
             
-        # Dapatkan jumlah ayat berdasarkan Surah yang dipilih
-        max_ayat = JUZ_AMMA_MAP.get(surah_name, {}).get('ayat_count', 1)
+    # Dapatkan jumlah ayat berdasarkan Surah yang dipilih
+    max_ayat = JUZ_AMMA_MAP.get(selected_surah, {}).get('ayat_count', 1)
+    
+    # Dapatkan riwayat hafalan Surah ini untuk murid yang dipilih
+    df_surah_history = df_hafalan[
+        (df_hafalan['ID_MURID'] == student_id) & 
+        (df_hafalan['Surah'] == selected_surah)
+    ].sort_values(by='Tanggal', ascending=False)
 
-        with col2:
-            ayat_awal = st.number_input("Ayat Awal", min_value=1, max_value=max_ayat, value=1, key="ayat_awal")
+    st.markdown(f"**Surah:** {selected_surah} (Total Ayat: {max_ayat})")
+    st.markdown("---")
+    
+    # Inisialisasi status ayat saat ini (Hafal/Mengulang/Kosong)
+    current_status = {}
+    
+    # Perhitungan Status Ayat Saat Ini (berdasarkan catatan terakhir yang 'Hafal')
+    # Ayat yang tercatat 'Hafal' dalam riwayat akan di-highlight
+    hafal_ayat_set = set()
+    
+    if not df_surah_history.empty:
+        # Hanya perlu memeriksa catatan 'Hafal' terbaru
+        df_hafal = df_surah_history[df_surah_history['Status'] == 'Hafal']
         
-        with col3:
-            ayat_akhir = st.number_input("Ayat Akhir", min_value=ayat_awal, max_value=max_ayat, value=max_ayat, key="ayat_akhir")
-            
-        status = st.radio("Status Hafalan", ['Hafal', 'Mengulang', 'Lulus'], index=0, horizontal=True)
-        catatan = st.text_area("Catatan Guru (Opsional)", "")
+        for index, row in df_hafal.iterrows():
+            # Tambahkan semua ayat dalam rentang yang dicatat 'Hafal'
+            hafal_ayat_set.update(range(row['Ayat_Awal'], row['Ayat_Akhir'] + 1))
+    
+    # Tentukan status default untuk form
+    for i in range(1, max_ayat + 1):
+        if i in hafal_ayat_set:
+            # Jika ayat sudah pernah dicatat 'Hafal', setting defaultnya adalah 'Hafal'
+            current_status[f'ayat_{i}'] = 'Hafal'
+        else:
+            # Jika belum, setting defaultnya adalah 'Mengulang'
+            current_status[f'ayat_{i}'] = 'Mengulang'
+
+    
+    with st.form("detail_hafalan_form", clear_on_submit=False):
         
-        submitted = st.form_submit_button("Simpan Catatan Hafalan")
+        st.markdown("##### Catat Status Hafalan Per Ayat")
+        st.caption("Pilih status 'Hafal' atau 'Mengulang' untuk setiap ayat. Status 'Hafal' yang sudah tercatat akan dipertahankan.")
+        
+        # Buat grid untuk input status
+        cols = st.columns(min(max_ayat, 6)) # Maksimal 6 kolom per baris
+        status_data = {}
+        
+        for i in range(1, max_ayat + 1):
+            col_index = (i - 1) % len(cols)
+            with cols[col_index]:
+                # Gunakan key unik
+                key = f"status_ayat_{selected_surah}_{i}"
+                
+                # Cek status sebelumnya untuk default value
+                default_status_index = 0 if current_status.get(f'ayat_{i}') == 'Hafal' else 1
+                
+                status_data[f'ayat_{i}'] = st.radio(
+                    f"Ayat {i}", 
+                    ['Hafal', 'Mengulang'], 
+                    index=default_status_index,
+                    key=key, 
+                    horizontal=False,
+                    # Teks bantuan
+                    label_visibility='visible' 
+                )
+
+        st.markdown("---")
+        catatan_global = st.text_area("Catatan Global (Opsional - Diterapkan ke semua ayat di atas)", key="catatan_global")
+        
+        submitted = st.form_submit_button("Simpan Catatan Detail Hafalan")
 
         if submitted:
-            if student_id:
-                if ayat_awal > ayat_akhir:
-                    st.error("Ayat Awal tidak boleh lebih besar dari Ayat Akhir.")
-                else:
-                    add_new_hafalan(student_id, surah_name, ayat_awal, ayat_akhir, status, catatan)
-            else:
-                st.error("Silakan pilih murid terlebih dahulu.")
+            process_ayat_details(student_id, selected_surah, max_ayat, status_data, catatan_global)
 
-    # Tampilkan catatan hafalan terakhir murid yang dipilih
-    if student_id and not df_hafalan.empty:
-        st.subheader(f"Riwayat Hafalan {student_name}")
-        df_riwayat = df_hafalan[df_hafalan['ID_MURID'] == student_id].sort_values(by='Tanggal', ascending=False)
-        st.dataframe(df_riwayat[['Tanggal', 'Surah', 'Ayat_Awal', 'Ayat_Akhir', 'Status', 'Catatan']], use_container_width=True)
+    # Tampilkan riwayat hafalan
+    if not df_surah_history.empty:
+        st.subheader(f"Riwayat Hafalan Surah {selected_surah}")
+        st.info("Riwayat di bawah ini adalah blok catatan hafalan yang telah disatukan oleh sistem.")
+        df_riwayat = df_surah_history[['Tanggal', 'Ayat_Awal', 'Ayat_Akhir', 'Status', 'Catatan', 'ID_HAFALAN']].copy()
+        df_riwayat['Ayat'] = df_riwayat['Ayat_Awal'].astype(str) + '-' + df_riwayat['Ayat_Akhir'].astype(str)
+        st.dataframe(df_riwayat[['Tanggal', 'Ayat', 'Status', 'Catatan', 'ID_HAFALAN']], use_container_width=True)
+
 
 def show_manage_student_form():
     """Tampilkan form untuk menambahkan/menghapus murid (via input atau CSV) dengan tata letak kolom."""
@@ -244,15 +323,19 @@ def show_report_table():
     
     for index, murid in df_murid.iterrows():
         murid_id = murid['ID_MURID']
+        
+        # Perhitungan LULUS sekarang menggunakan fungsi yang telah diperbarui
+        lulus_count = calculate_lulus_count(df_hafalan, murid_id)
+        
+        # Surah Tercatat: Surah yang memiliki *setidaknya* satu catatan hafalan
         df_m = df_hafalan[df_hafalan['ID_MURID'] == murid_id]
         surah_done_count = df_m['Surah'].nunique()
-        lulus_count = calculate_lulus_count(df_hafalan, murid_id)
-        progress_percentage = (surah_done_count / len(SURAH_NAMES)) * 100 if len(SURAH_NAMES) > 0 else 0
+
+        progress_percentage = (lulus_count / len(SURAH_NAMES)) * 100 if len(SURAH_NAMES) > 0 else 0
         
         last_note = "-"
         if not df_m.empty:
             df_m_sorted = df_m.sort_values(by='Tanggal', ascending=False)
-            # Pastikan kolom 'Catatan' ada dan baris pertama tidak kosong
             if 'Catatan' in df_m_sorted.columns and not pd.isna(df_m_sorted['Catatan'].iloc[0]):
                  last_note = df_m_sorted['Catatan'].iloc[0] if df_m_sorted['Catatan'].iloc[0] != '' else "-"
         
@@ -260,9 +343,9 @@ def show_report_table():
             'Nama Murid': murid['Nama_Murid'],
             'Kelas': murid['Kelas'],
             'NIS': murid['NIS'],
-            'Surah Selesai': f"{surah_done_count} dari {len(SURAH_NAMES)}",
+            'Surah Tercatat': f"{surah_done_count} dari {len(SURAH_NAMES)}",
             'Surah Lulus': lulus_count,
-            'Progres (%)': f"{progress_percentage:.1f}%",
+            'Progres Lulus (%)': f"{progress_percentage:.1f}%", # Ubah progres berdasarkan Lulus
             'Catatan Terakhir': last_note
         })
 
@@ -294,23 +377,12 @@ def show_progress_report():
     df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
     
-    if df_murid.empty:
-        st.warning("Data murid kosong. Tidak ada laporan yang ditampilkan.")
+    if st.session_state.get('selected_student_id') is None:
+        st.warning("Silakan pilih murid terlebih dahulu di bawah menu.")
         return
 
-    murid_options = ['Pilih Murid'] + sorted([
-        f"{row['Nama_Murid']} - NIS: {row['NIS']} (Kelas: {row['Kelas']})"
-        for index, row in df_murid.iterrows()
-    ])
-    
-    selected_murid_display = st.selectbox("Pilih Murid untuk Dilihat Progresnya", murid_options, key="select_student_report")
-
-    if selected_murid_display == 'Pilih Murid':
-        return
-
-    nis_part = selected_murid_display.split(" - NIS: ")[1].split(" (Kelas: ")[0]
-    student_id = nis_part
-    student_name = selected_murid_display.split(" - NIS: ")[0]
+    student_id = st.session_state.selected_student_id
+    student_name = st.session_state.selected_student_name
     
     st.markdown(f"#### Progres {student_name}")
     murid_data = df_murid[df_murid['ID_MURID'] == student_id].iloc[0]
@@ -322,26 +394,28 @@ def show_progress_report():
     df_m = df_hafalan[df_hafalan['ID_MURID'] == student_id]
     
     lulus_count = calculate_lulus_count(df_hafalan, student_id)
-    surah_done_count = df_m['Surah'].nunique()
     surah_total = len(SURAH_NAMES)
     
     col_stat1, col_stat2, col_stat3 = st.columns(3)
-    col_stat1.metric("Surah Tercatat", f"{surah_done_count} / {surah_total}")
-    col_stat2.metric("Status Lulus", f"{lulus_count} Surah")
+    col_stat1.metric("Surah Lulus", f"{lulus_count} / {surah_total}")
+    col_stat2.metric("Progres Lulus", f"{round((lulus_count / surah_total) * 100, 1)}%")
     
-    sisa = surah_total - surah_done_count
+    sisa = surah_total - lulus_count
     col_stat3.metric("Sisa Surah", f"{sisa} Surah")
 
-    progress_val = (surah_done_count / surah_total)
+    progress_val = (lulus_count / surah_total)
     st.progress(progress_val)
-    st.markdown(f"Progres total: **{progress_val * 100:.1f}%**")
+    st.markdown(f"Progres Lulus Total: **{progress_val * 100:.1f}%**")
 
     st.markdown("##### Riwayat Detail Hafalan")
     if df_m.empty:
         st.info("Murid ini belum memiliki catatan hafalan.")
     else:
         df_riwayat_display = df_m.sort_values(by='Tanggal', ascending=False)
-        st.dataframe(df_riwayat_display[['Tanggal', 'Surah', 'Ayat_Awal', 'Ayat_Akhir', 'Status', 'Catatan', 'ID_HAFALAN']], use_container_width=True)
+        st.info("Riwayat di bawah ini adalah blok catatan hafalan yang telah disatukan oleh sistem.")
+        df_riwayat_display['Ayat'] = df_riwayat_display['Ayat_Awal'].astype(str) + '-' + df_riwayat_display['Ayat_Akhir'].astype(str)
+
+        st.dataframe(df_riwayat_display[['Tanggal', 'Surah', 'Ayat', 'Status', 'Catatan', 'ID_HAFALAN']], use_container_width=True)
 
         st.markdown("##### Hapus Catatan Hafalan Tertentu")
         hafalan_to_delete = st.selectbox(
@@ -356,6 +430,63 @@ def show_progress_report():
             
 
 
+# --- SELEKSI MURID (GLOBAL) ---
+def render_student_selection():
+    """Tampilkan filter kelas dan pemilihan murid secara global."""
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("##### Pilih Murid")
+    
+    df_murid = st.session_state.df_murid
+
+    if df_murid.empty:
+        st.sidebar.warning("Data murid kosong.")
+        # Reset selection state
+        st.session_state.selected_student_id = None
+        st.session_state.selected_student_name = None
+        return
+
+    # 1. Ambil daftar kelas unik untuk filter
+    unique_kelas = sorted(df_murid['Kelas'].unique().tolist())
+    kelas_filter = st.sidebar.selectbox(
+        "Filter Kelas", 
+        ["Semua Kelas"] + unique_kelas, 
+        key="kelas_filter_input_sidebar"
+    )
+
+    # 2. Filter murid berdasarkan kelas
+    if kelas_filter != "Semua Kelas":
+        df_filtered = df_murid[df_murid['Kelas'] == kelas_filter]
+    else:
+        df_filtered = df_murid
+        
+    # 3. Buat daftar murid untuk selectbox (Nama - NIS)
+    murid_options = ['Pilih Murid'] + sorted([
+        f"{row['Nama_Murid']} - NIS: {row['NIS']} (Kelas: {row['Kelas']})"
+        for index, row in df_filtered.iterrows()
+    ])
+    
+    selected_murid_display = st.sidebar.selectbox(
+        "Pilih Murid", 
+        murid_options, 
+        key="select_student_global"
+    )
+
+    # Simpan ID dan Nama ke Session State
+    if selected_murid_display == 'Pilih Murid':
+        st.session_state.selected_student_id = None
+        st.session_state.selected_student_name = None
+    else:
+        # Ekstrak NIS/ID_MURID dari string yang dipilih
+        nis_part = selected_murid_display.split(" - NIS: ")[1].split(" (Kelas: ")[0]
+        student_id = nis_part
+        student_name = selected_murid_display.split(" - NIS: ")[0]
+        
+        st.session_state.selected_student_id = student_id
+        st.session_state.selected_student_name = student_name
+        
+        st.sidebar.markdown(f"**Murid Aktif:** {student_name}")
+        st.sidebar.markdown(f"**NIS:** {student_id}")
+
 # --- APLIKASI UTAMA ---
 
 def main():
@@ -363,9 +494,8 @@ def main():
     initialize_csv_files()
     load_data_to_session_state()
     
-    # Sidebar
+    # Sidebar: Menu Utama
     st.sidebar.title("Menu Aplikasi")
-    st.sidebar.markdown("---")
     
     # Ambil data murid untuk statistik sidebar
     df_murid = st.session_state.df_murid
@@ -374,7 +504,6 @@ def main():
     # Menampilkan total murid di sidebar
     st.sidebar.metric("Total Murid Terdaftar", total_murid)
     
-    # FIX: Hapus argumen 'icons' untuk mengatasi TypeError
     menu = st.sidebar.radio(
         "Pilih Halaman",
         [
@@ -386,11 +515,21 @@ def main():
         key="main_menu_radio"
     )
     
+    # Sidebar: Seleksi Murid (Global)
+    render_student_selection()
+
+    
     st.title("📚 Sistem Pencatatan Hafalan Juz Amma")
     st.markdown("---")
 
     if menu == "INPUT HAFALAN":
-        show_add_hafalan_form()
+        student_id = st.session_state.get('selected_student_id')
+        student_name = st.session_state.get('selected_student_name')
+        if student_id:
+            show_add_hafalan_form(student_id, student_name)
+        else:
+            st.warning("Silakan pilih murid terlebih dahulu di menu samping ('Pilih Murid').")
+
     elif menu == "LAPORAN PROGRES INDIVIDU":
         show_progress_report()
     elif menu == "TABEL RINGKASAN":
