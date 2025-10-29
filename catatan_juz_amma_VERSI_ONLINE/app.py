@@ -52,68 +52,7 @@ def add_new_hafalan(student_id, surah_name, ayat_awal, ayat_akhir, status, catat
     if save_dataframes(st.session_state.df_murid, df_new):
         st.toast(f"Catatan hafalan Surah **{surah_name}** ayat {ayat_awal}-{ayat_akhir} berhasil ditambahkan.", icon="✅")
         time.sleep(1)
-        # st.rerun() # Tidak perlu rerun, toast sudah cukup
-
-def process_ayat_details(student_id, surah_name, ayat_count, status_data, catatan_global):
-    """Memproses detail status per ayat dan menambahkannya sebagai catatan hafalan."""
-    df_hafalan = st.session_state.df_hafalan.copy()
-    
-    records_to_add = []
-    
-    # Kelompokkan ayat-ayat yang berdekatan dengan status yang sama
-    current_status = None
-    start_ayat = None
-    
-    for i in range(1, ayat_count + 1):
-        status = status_data[f'ayat_{i}']
-        
-        if status != current_status:
-            # Jika status berubah atau ini adalah awal
-            if current_status is not None:
-                # Simpan blok sebelumnya
-                records_to_add.append({
-                    'ID_HAFALAN': str(uuid.uuid4()),
-                    'ID_MURID': student_id,
-                    'Tanggal': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'Surah': surah_name,
-                    'Ayat_Awal': start_ayat,
-                    'Ayat_Akhir': i - 1, # Ayat sebelumnya adalah akhir blok
-                    'Status': current_status,
-                    'Catatan': catatan_global # Catatan digunakan untuk seluruh blok
-                })
-            
-            # Mulai blok baru
-            current_status = status
-            start_ayat = i
-
-        # Jika ini adalah ayat terakhir, simpan blok saat ini
-        if i == ayat_count:
-            if current_status is not None:
-                 records_to_add.append({
-                    'ID_HAFALAN': str(uuid.uuid4()),
-                    'ID_MURID': student_id,
-                    'Tanggal': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'Surah': surah_name,
-                    'Ayat_Awal': start_ayat,
-                    'Ayat_Akhir': ayat_count,
-                    'Status': current_status,
-                    'Catatan': catatan_global
-                })
-
-
-    if not records_to_add:
-        st.warning("Tidak ada ayat yang dipilih, atau semua ayat dibiarkan kosong.")
-        return
-
-    # Gabungkan catatan baru
-    df_new_records = pd.DataFrame(records_to_add)
-    df_new = pd.concat([df_hafalan, df_new_records], ignore_index=True)
-
-    # Simpan kedua DataFrame
-    if save_dataframes(st.session_state.df_murid, df_new):
-        st.success(f"Catatan detail hafalan Surah **{surah_name}** berhasil disimpan.")
-        time.sleep(1)
-        st.rerun()
+        st.rerun() # Rerun untuk update visualisasi riwayat
 
 
 def delete_hafalan(hafalan_id):
@@ -128,8 +67,8 @@ def delete_hafalan(hafalan_id):
 # --- FUNGSI TAMPILAN (VIEW) ---
 
 def show_add_hafalan_form(student_id, student_name):
-    """Tampilkan form untuk input hafalan baru dengan detail per ayat."""
-    st.header("📝 INPUT HAFALAN DETAIL")
+    """Tampilkan form untuk input hafalan baru (rentang ayat) dan visualisasi riwayat per ayat."""
+    st.header("📝 INPUT HAFALAN")
     
     df_hafalan = st.session_state.df_hafalan
     
@@ -139,83 +78,141 @@ def show_add_hafalan_form(student_id, student_name):
     # Dapatkan jumlah ayat berdasarkan Surah yang dipilih
     max_ayat = JUZ_AMMA_MAP.get(selected_surah, {}).get('ayat_count', 1)
     
+    st.markdown(f"**Surah:** {selected_surah} (Total Ayat: {max_ayat})")
+    
+    # --- FORM INPUT RENTANG AYAT ---
+    with st.form("rentang_hafalan_form", clear_on_submit=True):
+        st.markdown("##### Catat Rentang Ayat")
+        
+        col_input1, col_input2, col_input3 = st.columns([1, 1, 2])
+        
+        with col_input1:
+            ayat_awal = st.number_input(
+                "Dari Ayat Ke-", 
+                min_value=1, 
+                max_value=max_ayat, 
+                value=1, 
+                key="ayat_awal_input"
+            )
+        
+        with col_input2:
+            ayat_akhir = st.number_input(
+                "Sampai Ayat Ke-", 
+                min_value=1, 
+                max_value=max_ayat, 
+                value=max_ayat, 
+                key="ayat_akhir_input"
+            )
+
+        with col_input3:
+            # Status hanya Hafal dan Mengulang (tidak ada Lulus)
+            status = st.radio(
+                "Status",
+                ['Hafal', 'Mengulang'],
+                index=0,
+                key="status_radio_input",
+                horizontal=True
+            )
+            
+        catatan = st.text_area("Catatan (Opsional)", key="catatan_input")
+        
+        submitted = st.form_submit_button("Simpan Catatan Hafalan")
+
+        if submitted:
+            if ayat_awal > ayat_akhir:
+                st.error("Ayat Awal tidak boleh lebih besar dari Ayat Akhir.")
+            elif ayat_awal < 1 or ayat_akhir > max_ayat:
+                st.error(f"Rentang ayat harus antara 1 sampai {max_ayat}.")
+            else:
+                add_new_hafalan(student_id, selected_surah, ayat_awal, ayat_akhir, status, catatan)
+
+    st.markdown("---")
+
+    # --- VISUALISASI RIWAYAT PER AYAT (Sesuai Gambar Lampiran) ---
+    st.subheader("Visualisasi Progres Ayat")
+    
     # Dapatkan riwayat hafalan Surah ini untuk murid yang dipilih
     df_surah_history = df_hafalan[
         (df_hafalan['ID_MURID'] == student_id) & 
         (df_hafalan['Surah'] == selected_surah)
     ].sort_values(by='Tanggal', ascending=False)
-
-    st.markdown(f"**Surah:** {selected_surah} (Total Ayat: {max_ayat})")
-    st.markdown("---")
     
-    # Inisialisasi status ayat saat ini (Hafal/Mengulang/Kosong)
-    current_status = {}
-    
-    # Perhitungan Status Ayat Saat Ini (berdasarkan catatan terakhir yang 'Hafal')
-    # Ayat yang tercatat 'Hafal' dalam riwayat akan di-highlight
-    hafal_ayat_set = set()
-    
-    if not df_surah_history.empty:
-        # Hanya perlu memeriksa catatan 'Hafal' terbaru
-        df_hafal = df_surah_history[df_surah_history['Status'] == 'Hafal']
-        
-        for index, row in df_hafal.iterrows():
-            # Tambahkan semua ayat dalam rentang yang dicatat 'Hafal'
-            hafal_ayat_set.update(range(row['Ayat_Awal'], row['Ayat_Akhir'] + 1))
-    
-    # Tentukan status default untuk form
+    # 1. Tentukan status LULUS (Hafal) untuk setiap ayat
+    ayat_status = {}
+    # Default semua ayat dianggap 'Belum Hafal'
     for i in range(1, max_ayat + 1):
-        if i in hafal_ayat_set:
-            # Jika ayat sudah pernah dicatat 'Hafal', setting defaultnya adalah 'Hafal'
-            current_status[f'ayat_{i}'] = 'Hafal'
-        else:
-            # Jika belum, setting defaultnya adalah 'Mengulang'
-            current_status[f'ayat_{i}'] = 'Mengulang'
-
+        ayat_status[i] = {'status': 'Belum Hafal', 'color': 'gray', 'hafal_date': '-'}
+        
+    # Hanya perlu memeriksa catatan 'Hafal' terbaru
+    df_hafal = df_surah_history[df_surah_history['Status'] == 'Hafal'].sort_values(by='Tanggal', ascending=True)
     
-    with st.form("detail_hafalan_form", clear_on_submit=False):
-        
-        st.markdown("##### Catat Status Hafalan Per Ayat")
-        st.caption("Pilih status 'Hafal' atau 'Mengulang' untuk setiap ayat. Status 'Hafal' yang sudah tercatat akan dipertahankan.")
-        
-        # Buat grid untuk input status
-        cols = st.columns(min(max_ayat, 6)) # Maksimal 6 kolom per baris
-        status_data = {}
-        
-        for i in range(1, max_ayat + 1):
-            col_index = (i - 1) % len(cols)
-            with cols[col_index]:
-                # Gunakan key unik
-                key = f"status_ayat_{selected_surah}_{i}"
+    # Iterasi dari tanggal terlama ke terbaru untuk mendapatkan tanggal 'Hafal' terakhir
+    for index, row in df_hafal.iterrows():
+        for i in range(row['Ayat_Awal'], row['Ayat_Akhir'] + 1):
+            if i in ayat_status:
+                ayat_status[i]['status'] = 'Hafal'
+                ayat_status[i]['color'] = 'green'
+                ayat_status[i]['hafal_date'] = row['Tanggal'].split(' ')[0] # Ambil tanggal saja
                 
-                # Cek status sebelumnya untuk default value
-                default_status_index = 0 if current_status.get(f'ayat_{i}') == 'Hafal' else 1
+    # 2. Tentukan ayat yang pernah 'Mengulang'
+    df_mengulang = df_surah_history[df_surah_history['Status'] == 'Mengulang']
+    for index, row in df_mengulang.iterrows():
+        for i in range(row['Ayat_Awal'], row['Ayat_Akhir'] + 1):
+            # Jika ayat sudah Hafal, jangan diubah
+            if ayat_status[i]['status'] != 'Hafal':
+                ayat_status[i]['status'] = 'Mengulang'
+                ayat_status[i]['color'] = 'orange'
                 
-                status_data[f'ayat_{i}'] = st.radio(
-                    f"Ayat {i}", 
-                    ['Hafal', 'Mengulang'], 
-                    index=default_status_index,
-                    key=key, 
-                    horizontal=False,
-                    # Teks bantuan
-                    label_visibility='visible' 
-                )
-
-        st.markdown("---")
-        catatan_global = st.text_area("Catatan Global (Opsional - Diterapkan ke semua ayat di atas)", key="catatan_global")
+    # 3. Tampilkan Visualisasi
+    # Buat string HTML/Markdown untuk visualisasi grid
+    html_content = ""
+    ayat_per_row = 10 # 10 ayat per baris
+    
+    for i in range(1, max_ayat + 1):
+        status_info = ayat_status[i]
         
-        submitted = st.form_submit_button("Simpan Catatan Detail Hafalan")
+        if (i - 1) % ayat_per_row == 0:
+            # Mulai baris baru
+            if i > 1:
+                html_content += "</div>"
+            html_content += "<div style='display: flex; flex-wrap: wrap; margin-bottom: 5px;'>"
+            
+        color = status_info['color']
+        tooltip = f"Ayat {i}: {status_info['status']}"
+        
+        # Style kotak ayat
+        box_style = f"background-color: {color}; color: white; border-radius: 4px; padding: 5px; margin: 2px; width: 40px; text-align: center; font-size: 14px; cursor: pointer; position: relative;"
+        
+        # Tooltip detail
+        tooltip_content = f"Tanggal Hafal Terakhir: {status_info['hafal_date']}" if status_info['status'] == 'Hafal' else f"Status: {status_info['status']}"
+        
+        html_content += f"""
+        <div style="{box_style}" title="{tooltip} - {tooltip_content}">
+            {i}
+        </div>
+        """
+        
+    # Tutup div baris terakhir
+    if max_ayat > 0:
+        html_content += "</div>"
+        
+    # Tampilkan di Streamlit
+    st.markdown(html_content, unsafe_allow_html=True)
+    
+    st.caption("Warna: 🟢 Hafal | 🟠 Mengulang | ⚪ Belum Dicatat/Belum Hafal (Klik kotak untuk detail status)")
+    st.markdown("---")
 
-        if submitted:
-            process_ayat_details(student_id, selected_surah, max_ayat, status_data, catatan_global)
-
-    # Tampilkan riwayat hafalan
+    # Tampilkan riwayat hafalan (tabel)
     if not df_surah_history.empty:
-        st.subheader(f"Riwayat Hafalan Surah {selected_surah}")
-        st.info("Riwayat di bawah ini adalah blok catatan hafalan yang telah disatukan oleh sistem.")
+        st.subheader(f"Riwayat Catatan Hafalan Surah {selected_surah} (Tabel)")
         df_riwayat = df_surah_history[['Tanggal', 'Ayat_Awal', 'Ayat_Akhir', 'Status', 'Catatan', 'ID_HAFALAN']].copy()
-        df_riwayat['Ayat'] = df_riwayat['Ayat_Awal'].astype(str) + '-' + df_riwayat['Ayat_Akhir'].astype(str)
-        st.dataframe(df_riwayat[['Tanggal', 'Ayat', 'Status', 'Catatan', 'ID_HAFALAN']], use_container_width=True)
+        df_riwayat['Rentang Ayat'] = df_riwayat['Ayat_Awal'].astype(str) + '-' + df_riwayat['Ayat_Akhir'].astype(str)
+        
+        st.dataframe(
+            df_riwayat[['Tanggal', 'Rentang Ayat', 'Status', 'Catatan', 'ID_HAFALAN']], 
+            use_container_width=True,
+            hide_index=True
+        )
 
 
 def show_manage_student_form():
@@ -294,18 +291,20 @@ def show_manage_student_form():
         if selected_display_string != 'Pilih Murid yang Akan Dihapus':
             try:
                 # Ekstrak NIS/ID_MURID
-                nis_part = selected_display_string.split(" - NIS: ")[1]
-                student_id_to_delete = nis_part
+                nis_part = selected_display_string.split(" - NIS: ")[1].split(" (Kelas: ")[0] # Ekstraksi NIS harus disesuaikan jika format string berubah
+                student_id_to_delete = df_filtered_del[df_filtered_del['NIS'] == nis_part]['ID_MURID'].iloc[0]
                 student_name_to_delete = selected_display_string.split(' - Kelas:')[0] 
                 
-                st.error(f"Anda yakin ingin menghapus **{student_name_to_delete}** (NIS: {student_id_to_delete}) secara permanen? Semua catatan hafalannya akan ikut terhapus!")
+                st.error(f"Anda yakin ingin menghapus **{student_name_to_delete}** (NIS: {nis_part}) secara permanen? Semua catatan hafalannya akan ikut terhapus!")
                 
                 if st.button(f"✅ KONFIRMASI HAPUS {student_name_to_delete}", key="confirm_delete_button"):
                     delete_student(df_murid.copy(), df_hafalan.copy(), student_id_to_delete, student_name_to_delete)
                     time.sleep(1) 
                     st.rerun()
             except IndexError:
-                st.warning("Peringatan: Murid yang dipilih memiliki format data yang tidak lengkap.")
+                st.warning("Peringatan: Murid yang dipilih memiliki format data yang tidak lengkap atau NIS tidak ditemukan.")
+            except Exception:
+                 st.warning("Peringatan: Terjadi kesalahan saat mencoba mengidentifikasi murid.")
 
 
 def show_report_table():
@@ -337,7 +336,12 @@ def show_report_table():
         if not df_m.empty:
             df_m_sorted = df_m.sort_values(by='Tanggal', ascending=False)
             if 'Catatan' in df_m_sorted.columns and not pd.isna(df_m_sorted['Catatan'].iloc[0]):
-                 last_note = df_m_sorted['Catatan'].iloc[0] if df_m_sorted['Catatan'].iloc[0] != '' else "-"
+                 # Ambil catatan dari baris pertama yang mungkin bukan string kosong
+                 for note in df_m_sorted['Catatan']:
+                     if note != '':
+                         last_note = note
+                         break
+                 
         
         report_data.append({
             'Nama Murid': murid['Nama_Murid'],
@@ -385,11 +389,16 @@ def show_progress_report():
     student_name = st.session_state.selected_student_name
     
     st.markdown(f"#### Progres {student_name}")
-    murid_data = df_murid[df_murid['ID_MURID'] == student_id].iloc[0]
-    col_info1, col_info2, col_info3 = st.columns(3)
-    col_info1.metric("Kelas", murid_data['Kelas'])
-    col_info2.metric("NIS", murid_data['NIS'])
-    col_info3.metric("Tanggal Daftar", murid_data['Tanggal_Daftar'].split(' ')[0])
+    try:
+        murid_data = df_murid[df_murid['ID_MURID'] == student_id].iloc[0]
+        col_info1, col_info2, col_info3 = st.columns(3)
+        col_info1.metric("Kelas", murid_data['Kelas'])
+        col_info2.metric("NIS", murid_data['NIS'])
+        col_info3.metric("Tanggal Daftar", murid_data['Tanggal_Daftar'].split(' ')[0])
+    except:
+        st.error("Data murid tidak ditemukan.")
+        return
+
 
     df_m = df_hafalan[df_hafalan['ID_MURID'] == student_id]
     
@@ -412,7 +421,7 @@ def show_progress_report():
         st.info("Murid ini belum memiliki catatan hafalan.")
     else:
         df_riwayat_display = df_m.sort_values(by='Tanggal', ascending=False)
-        st.info("Riwayat di bawah ini adalah blok catatan hafalan yang telah disatukan oleh sistem.")
+        st.info("Riwayat di bawah ini adalah blok catatan hafalan.")
         df_riwayat_display['Ayat'] = df_riwayat_display['Ayat_Awal'].astype(str) + '-' + df_riwayat_display['Ayat_Akhir'].astype(str)
 
         st.dataframe(df_riwayat_display[['Tanggal', 'Surah', 'Ayat', 'Status', 'Catatan', 'ID_HAFALAN']], use_container_width=True)
@@ -477,15 +486,19 @@ def render_student_selection():
         st.session_state.selected_student_name = None
     else:
         # Ekstrak NIS/ID_MURID dari string yang dipilih
-        nis_part = selected_murid_display.split(" - NIS: ")[1].split(" (Kelas: ")[0]
-        student_id = nis_part
-        student_name = selected_murid_display.split(" - NIS: ")[0]
-        
-        st.session_state.selected_student_id = student_id
-        st.session_state.selected_student_name = student_name
-        
-        st.sidebar.markdown(f"**Murid Aktif:** {student_name}")
-        st.sidebar.markdown(f"**NIS:** {student_id}")
+        try:
+            nis_part = selected_murid_display.split(" - NIS: ")[1].split(" (Kelas: ")[0]
+            student_id = df_filtered[df_filtered['NIS'] == nis_part]['ID_MURID'].iloc[0]
+            student_name = selected_murid_display.split(" - NIS: ")[0]
+            
+            st.session_state.selected_student_id = student_id
+            st.session_state.selected_student_name = student_name
+            
+            st.sidebar.markdown(f"**Murid Aktif:** {student_name}")
+            st.sidebar.markdown(f"**NIS:** {nis_part}")
+        except Exception:
+             st.sidebar.error("Gagal memilih murid. Data mungkin tidak lengkap.")
+
 
 # --- APLIKASI UTAMA ---
 
