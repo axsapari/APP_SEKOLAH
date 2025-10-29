@@ -106,96 +106,91 @@ def upload_students_csv(uploaded_file, df_murid_copy):
     Memproses file CSV yang diunggah untuk menambahkan murid secara massal.
     Menggunakan NIS sebagai ID_MURID.
     """
+    # Kolom wajib
+    required_cols = ['Nama_Murid', 'Kelas', 'NIS']
+    df_upload = None
+    delimiter = ';' # Delimiter default (titik koma)
+
     try:
-        # PENTING: Menggunakan delimiter ';' 
-        # PERBAIKAN BOM: Menambahkan encoding='utf-8-sig' untuk menangani Byte Order Mark
+        # Coba baca dengan delimiter default (titik koma)
+        uploaded_file.seek(0)
         df_upload = pd.read_csv(uploaded_file, sep=';', encoding='utf-8-sig')
         
-        # --- PERBAIKAN KOLOM: Lakukan pembersihan nama kolom secara agresif ---
-        # 1. Hapus spasi di awal/akhir
-        df_upload.columns = df_upload.columns.str.strip()
-        # 2. Ganti spasi, titik, atau karakter non-standar lainnya di tengah dengan underscore (atau hapus)
-        # Di sini, kita hanya fokus pada pembersihan ekstrem untuk memastikan kolom terdeteksi.
-        # Kita buat kolom yang dibersihkan (hanya huruf, angka, dan underscore)
-        cleaned_column_map = {}
-        for col in df_upload.columns:
-            # Pilihan 1: Hapus semua karakter yang bukan huruf/angka/spasi, lalu strip spasi (paling aman)
-            cleaned_name = ''.join(c for c in col if c.isalnum() or c == '_').strip()
-            if cleaned_name != col:
-                 cleaned_column_map[col] = cleaned_name
-
-        # Mapping: Hapus spasi dan karakter khusus lainnya (agresif)
+        # Bersihkan nama kolom
         df_upload.columns = [col.strip().replace(' ', '_').replace('.', '').replace('-', '_') for col in df_upload.columns]
         
-        # Mapping nama kolom yang dibersihkan kembali ke nama standar
-        # Misalnya, jika file punya "Nama Murid", kita ubah jadi "Nama_Murid"
-        df_upload.rename(columns={
-            'Nama_Murid': 'Nama_Murid', 
-            'NamaMurid': 'Nama_Murid', # Handle jika user menghilangkan underscore
-            'Kelas': 'Kelas', 
-            'NIS': 'NIS'
-        }, inplace=True, errors='ignore')
-        
-        # 1. Pastikan kolom wajib ada
-        required_cols = ['Nama_Murid', 'Kelas', 'NIS']
-        
-        missing_cols = [col for col in required_cols if col not in df_upload.columns]
-        
-        if missing_cols:
-            st.error(f"File CSV harus memiliki kolom wajib: {', '.join(required_cols)}. Kolom hilang: {', '.join(missing_cols)}.")
-            # Tampilkan kolom yang terdeteksi untuk debugging
-            st.info(f"Kolom yang terdeteksi di file Anda setelah pembersihan: {list(df_upload.columns)}")
+        # Jika kolom yang dibutuhkan tidak terdeteksi, coba dengan koma
+        if not all(col in df_upload.columns for col in required_cols):
+            # Reset pointer file sebelum membaca lagi
+            uploaded_file.seek(0)
             
-            # Tambahan: Cek delimiter alternatif
-            try:
-                # Coba baca dengan koma (,)
-                df_comma = pd.read_csv(uploaded_file, sep=',', encoding='utf-8-sig')
-                if any(col in df_comma.columns.str.strip().tolist() for col in required_cols):
-                     st.warning("Peringatan: Kami menduga file Anda menggunakan **koma (,)** sebagai pemisah, bukan titik koma (;). Silakan ganti pemisah di file CSV Anda menjadi titik koma (;) atau unggah ulang dengan file CSV standar.")
-            except Exception:
-                pass # Abaikan jika gagal
+            # Coba baca dengan koma
+            df_upload = pd.read_csv(uploaded_file, sep=',', encoding='utf-8-sig')
+            delimiter = ',' # Delimiter yang terdeteksi
             
-            return
-        
-        # Tambahkan kolom opsional jika tidak ada
-        for col in ['Nama_Wali', 'Kontak_Wali']:
-            if col not in df_upload.columns:
-                df_upload[col] = ''
-                
-        # 2. Cleaning dan ID Assignment (NIS sebagai ID_MURID)
-        df_upload['ID_MURID'] = df_upload['NIS'].astype(str).str.strip()
-        df_upload['Tanggal_Daftar'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Bersihkan nama kolom lagi
+            df_upload.columns = [col.strip().replace(' ', '_').replace('.', '').replace('-', '_') for col in df_upload.columns]
 
-        # 3. Validasi ID (NIS)
-        df_upload = df_upload.dropna(subset=['ID_MURID']).copy()
-        
-        # 4. Filter duplikat (cek terhadap data yang sudah ada)
-        existing_ids = set(df_murid_copy['ID_MURID'].values)
-        new_students = df_upload[~df_upload['ID_MURID'].isin(existing_ids)].copy()
-        
-        duplicates_count = len(df_upload) - len(new_students)
-        
-        if new_students.empty:
-            if duplicates_count > 0:
-                st.warning(f"Semua ({duplicates_count}) murid di file yang diunggah sudah ada (NIS duplikat). Tidak ada data baru yang ditambahkan.")
-            else:
-                 st.error("Tidak ada data murid baru yang valid dalam file yang diunggah.")
-            return
-
-        # 5. Gabungkan dan simpan
-        # Pastikan kolom sesuai dengan COLUMNS_MURID
-        df_new_students_filtered = new_students[COLUMNS_MURID]
-        df_combined = pd.concat([df_murid_copy, df_new_students_filtered], ignore_index=True)
-        
-        if save_dataframes(df_combined, st.session_state.df_hafalan):
-            success_msg = f"✅ Berhasil menambahkan **{len(new_students)}** murid baru."
-            if duplicates_count > 0:
-                success_msg += f" ({duplicates_count} murid dilewati karena NIS/ID duplikat)."
-            
-            st.success(success_msg)
-            st.rerun() 
-            
     except Exception as e:
-        # Pesan error yang lebih informatif
-        st.error(f"Gagal memproses file CSV. Pastikan format delimiter (';') dan kolom wajib (Nama_Murid, Kelas, NIS) benar. Detail error: {e}")
-        print(f"Error detail during CSV upload: {e}")
+        # Jika pembacaan gagal total
+        st.error(f"Gagal memproses file CSV: {e}")
+        return
+
+    # Mapping nama kolom yang dibersihkan kembali ke nama standar
+    df_upload.rename(columns={
+        'Nama_Murid': 'Nama_Murid', 
+        'NamaMurid': 'Nama_Murid',
+        'Kelas': 'Kelas', 
+        'NIS': 'NIS',
+        'NamaWali': 'Nama_Wali',
+        'KontakWali': 'Kontak_Wali'
+    }, inplace=True, errors='ignore')
+    
+    # --- Validasi Kolom Akhir ---
+    missing_cols = [col for col in required_cols if col not in df_upload.columns]
+    
+    if missing_cols:
+        st.error(f"File CSV harus memiliki kolom wajib: {', '.join(required_cols)}. Kolom hilang: {', '.join(missing_cols)}.")
+        st.info(f"Kolom yang terdeteksi di file Anda setelah pembersihan (Delimiter: {delimiter}): {list(df_upload.columns)}")
+        st.warning("Pastikan file Anda menggunakan pemisah **koma (`,`)** atau **titik koma (`;`)** dan judul kolomnya persis `Nama_Murid`, `Kelas`, dan `NIS`.")
+        return
+    
+    # Tambahkan kolom opsional jika tidak ada
+    for col in ['Nama_Wali', 'Kontak_Wali']:
+        if col not in df_upload.columns:
+            df_upload[col] = ''
+            
+    # 2. Cleaning dan ID Assignment (NIS sebagai ID_MURID)
+    # Pastikan NIS tidak kosong
+    df_upload = df_upload.dropna(subset=['NIS']).copy()
+    df_upload['ID_MURID'] = df_upload['NIS'].astype(str).str.strip()
+    df_upload['Tanggal_Daftar'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # 3. Validasi ID (NIS)
+    df_upload = df_upload[df_upload['ID_MURID'] != ''].copy()
+    
+    # 4. Filter duplikat (cek terhadap data yang sudah ada)
+    existing_ids = set(df_murid_copy['ID_MURID'].astype(str).values)
+    new_students = df_upload[~df_upload['ID_MURID'].astype(str).isin(existing_ids)].copy()
+    
+    duplicates_count = len(df_upload) - len(new_students)
+    
+    if new_students.empty:
+        if duplicates_count > 0:
+            st.warning(f"Semua ({duplicates_count}) murid di file yang diunggah sudah ada (NIS duplikat). Tidak ada data baru yang ditambahkan.")
+        else:
+                st.error("Tidak ada data murid baru yang valid dalam file yang diunggah.")
+        return
+
+    # 5. Gabungkan dan simpan
+    # Pastikan kolom sesuai dengan COLUMNS_MURID
+    df_new_students_filtered = new_students[COLUMNS_MURID]
+    df_combined = pd.concat([df_murid_copy, df_new_students_filtered], ignore_index=True)
+    
+    if save_dataframes(df_combined, st.session_state.df_hafalan):
+        success_msg = f"✅ Berhasil menambahkan **{len(new_students)}** murid baru."
+        if duplicates_count > 0:
+            success_msg += f" ({duplicates_count} murid dilewati karena NIS/ID duplikat)."
+        
+        st.success(success_msg)
+        st.rerun()
