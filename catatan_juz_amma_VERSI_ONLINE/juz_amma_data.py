@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import numpy as np
 
 # --- Data Master Juz Amma (37 Surah) ---
 JUZ_AMMA_MAP = {
@@ -47,19 +48,38 @@ TOTAL_AYAT_JUZ_AMMA = sum(data['ayat_count'] for data in JUZ_AMMA_MAP.values())
 
 def calculate_lulus_count(df_hafalan, student_id):
     """
-    Menghitung jumlah Surah yang status 'Lulus' untuk murid tertentu.
-    Jika ada beberapa entri untuk Surah yang sama, hanya dihitung jika 
-    setidaknya satu entri memiliki status 'Lulus'.
+    Menghitung jumlah Surah yang dianggap 'Lulus' (semua ayat Surah telah dicatat 'Hafal').
+    Lulus = Seluruh Ayat dari Surah tersebut (ayat 1 sampai ayat_count) tercatat dengan Status 'Hafal'.
     """
     if df_hafalan.empty:
         return 0
     
     df_m = df_hafalan[df_hafalan['ID_MURID'] == student_id].copy()
     
-    # Filter hanya yang statusnya 'Lulus'
-    df_lulus = df_m[df_m['Status'] == 'Lulus']
-    
-    # Hitung surah unik yang sudah lulus
-    lulus_count = df_lulus['Surah'].nunique()
-    
-    return lulus_count
+    # 1. Identifikasi Surah yang memiliki catatan hafalan
+    recorded_surahs = df_m['Surah'].unique()
+    lulus_surahs = set()
+
+    for surah in recorded_surahs:
+        ayat_count = JUZ_AMMA_MAP.get(surah, {}).get('ayat_count', 0)
+        if ayat_count == 0:
+            continue
+            
+        # 2. Filter catatan hafalan untuk Surah ini
+        df_surah = df_m[df_m['Surah'] == surah]
+        
+        # 3. Buat set ayat yang telah dicatat 'Hafal'
+        all_hafal_ayat = set()
+        for index, row in df_surah.iterrows():
+            if row['Status'] == 'Hafal':
+                # Tambahkan semua ayat dari Ayat_Awal hingga Ayat_Akhir ke set
+                all_hafal_ayat.update(range(row['Ayat_Awal'], row['Ayat_Akhir'] + 1))
+        
+        # 4. Bandingkan dengan semua ayat Surah
+        required_ayat = set(range(1, ayat_count + 1))
+        
+        # Jika semua ayat yang dibutuhkan ada dalam set ayat yang dicatat 'Hafal'
+        if required_ayat.issubset(all_hafal_ayat):
+            lulus_surahs.add(surah)
+            
+    return len(lulus_surahs)
