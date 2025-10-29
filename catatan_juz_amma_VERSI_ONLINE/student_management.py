@@ -107,11 +107,11 @@ def upload_students_csv(uploaded_file, df_murid_copy):
     Menggunakan NIS sebagai ID_MURID.
     """
     try:
-        # PENTING: Menggunakan delimiter ';' karena data yang diunggah sebelumnya menggunakan ';'
-        df_upload = pd.read_csv(uploaded_file, sep=';')
+        # PENTING: Menggunakan delimiter ';' 
+        # PERBAIKAN BOM: Menambahkan encoding='utf-8-sig' untuk menangani Byte Order Mark
+        df_upload = pd.read_csv(uploaded_file, sep=';', encoding='utf-8-sig')
         
         # --- PERBAIKAN: Hapus spasi/karakter tak terlihat dari nama kolom ---
-        # Ini mengatasi masalah di mana 'Nama_Murid' dibaca sebagai ' Nama_Murid' atau 'Nama_Murid\ufeff'
         df_upload.columns = df_upload.columns.str.strip()
         
         # 1. Pastikan kolom wajib ada
@@ -119,6 +119,8 @@ def upload_students_csv(uploaded_file, df_murid_copy):
         for col in required_cols:
             if col not in df_upload.columns:
                 st.error(f"File CSV harus memiliki kolom wajib: {', '.join(required_cols)}. Kolom '{col}' tidak ditemukan.")
+                # Tampilkan kolom yang terdeteksi untuk debugging
+                st.info(f"Kolom yang terdeteksi di file Anda: {list(df_upload.columns)}")
                 return
         
         # Tambahkan kolom opsional jika tidak ada
