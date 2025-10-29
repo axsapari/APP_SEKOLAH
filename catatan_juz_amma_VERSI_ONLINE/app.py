@@ -4,11 +4,14 @@ from datetime import datetime
 import os
 import uuid 
 import time
+import io
 
 # Import data master dari juz_amma_data.py
+# PASTIKAN FILE juz_amma_data.py ADA DI FOLDER YANG SAMA
 from juz_amma_data import JUZ_AMMA_MAP, SURAH_NAMES, TOTAL_AYAT_JUZ_AMMA, calculate_lulus_count
 
 # Import fungsi I/O dan manajemen dari student_management.py
+# PASTIKAN FILE student_management.py ADA DI FOLDER YANG SAMA
 from student_management import (
     initialize_csv_files, 
     load_data_to_session_state, 
@@ -63,13 +66,13 @@ def delete_hafalan(hafalan_id):
 
 def show_add_hafalan_form():
     """Tampilkan form untuk input hafalan baru."""
-    st.header("📝 Input Hafalan Murid Baru")
+    st.header("📝 INPUT HAFALAN")
     
     df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
 
     if df_murid.empty:
-        st.warning("Data murid kosong. Silakan tambahkan murid di menu 'Manajemen Murid'.")
+        st.warning("Data murid kosong. Silakan tambahkan murid di menu 'MANAJEMEN MURID'.")
         return
 
     # 1. Ambil daftar kelas unik untuk filter
@@ -138,25 +141,25 @@ def show_add_hafalan_form():
 
 def show_manage_student_form():
     """Tampilkan form untuk menambahkan/menghapus murid (via input atau CSV) dengan tata letak kolom."""
-    st.header("➕ Manajemen Murid") 
+    st.header("➕ MANAJEMEN MURID") 
     
     df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
 
+    # Tata letak tab sesuai permintaan
     tab1, tab2, tab3 = st.tabs(["Tambah Murid Baru", "Upload CSV Murid", "Hapus Murid"])
 
-    # === TAB 1: TAMBAH MURID BARU ===
+    # === TAB 1: TAMBAH MURID BARU (Menggunakan kolom) ===
     with tab1:
         st.markdown("##### Input Murid Satuan")
         with st.form("add_student_form", clear_on_submit=True):
             
-            # Kolom 1
+            # Kolom 1 dan Kolom 2
             col_a, col_b = st.columns(2)
             with col_a:
                 nama = st.text_input("Nama Murid*", key="nama_murid_input")
                 kelas = st.text_input("Kelas*", help="Contoh: VII A, VIII B, IX C", key="kelas_input")
             
-            # Kolom 2
             with col_b:
                 nis = st.text_input("NIS/Nomor Induk Siswa*", key="nis_input")
                 nama_wali = st.text_input("Nama Wali", key="nama_wali_input")
@@ -187,17 +190,14 @@ def show_manage_student_form():
             st.warning("Tidak ada murid yang terdaftar.")
             return
 
-        # 1. Ambil daftar kelas unik untuk filter
         unique_kelas = sorted(df_murid['Kelas'].unique().tolist())
         kelas_filter_del = st.selectbox("Filter Siswa Berdasarkan Kelas (Hapus)", ["Semua Kelas"] + unique_kelas, key="kelas_filter_delete")
 
-        # 2. Filter murid berdasarkan kelas
         if kelas_filter_del != "Semua Kelas":
             df_filtered_del = df_murid[df_murid['Kelas'] == kelas_filter_del]
         else:
             df_filtered_del = df_murid
             
-        # 3. Buat daftar murid untuk selectbox (Nama - Kelas - NIS)
         murid_options_del = ['Pilih Murid yang Akan Dihapus'] + sorted([
             f"{row['Nama_Murid']} - Kelas: {row['Kelas']} - NIS: {row['NIS']}"
             for index, row in df_filtered_del.iterrows()
@@ -213,10 +213,8 @@ def show_manage_student_form():
         student_name_to_delete = None
 
         if selected_display_string != 'Pilih Murid yang Akan Dihapus':
-            
-            # Ekstrak NIS/ID_MURID
             try:
-                # Mencari NIS di akhir string
+                # Ekstrak NIS/ID_MURID
                 nis_part = selected_display_string.split(" - NIS: ")[1]
                 student_id_to_delete = nis_part
                 student_name_to_delete = selected_display_string.split(' - Kelas:')[0] 
@@ -242,32 +240,21 @@ def show_report_table():
         st.warning("Data murid kosong. Tidak ada laporan yang ditampilkan.")
         return
 
-    # Gabungkan data murid dan hafalan untuk membuat ringkasan
     report_data = []
     
-    # 1. Hitung progres per murid
     for index, murid in df_murid.iterrows():
         murid_id = murid['ID_MURID']
-        
-        # Filter hafalan murid
         df_m = df_hafalan[df_hafalan['ID_MURID'] == murid_id]
-        
-        # Hitung jumlah surah yang sudah ada catatannya (Hafal/Mengulang/Lulus)
         surah_done_count = df_m['Surah'].nunique()
-        
-        # Hitung surah yang sudah LULUS (menggunakan fungsi dari juz_amma_data)
         lulus_count = calculate_lulus_count(df_hafalan, murid_id)
-        
-        # Progres
         progress_percentage = (surah_done_count / len(SURAH_NAMES)) * 100 if len(SURAH_NAMES) > 0 else 0
         
-        # Ambil catatan terakhir
-        # Pastikan tidak error jika catatan kosong atau DF kosong
         last_note = "-"
         if not df_m.empty:
             df_m_sorted = df_m.sort_values(by='Tanggal', ascending=False)
-            if not df_m_sorted['Catatan'].iloc[0] is None:
-                last_note = df_m_sorted['Catatan'].iloc[0] if df_m_sorted['Catatan'].iloc[0] != '' else "-"
+            # Pastikan kolom 'Catatan' ada dan baris pertama tidak kosong
+            if 'Catatan' in df_m_sorted.columns and not pd.isna(df_m_sorted['Catatan'].iloc[0]):
+                 last_note = df_m_sorted['Catatan'].iloc[0] if df_m_sorted['Catatan'].iloc[0] != '' else "-"
         
         report_data.append({
             'Nama Murid': murid['Nama_Murid'],
@@ -281,7 +268,6 @@ def show_report_table():
 
     df_report = pd.DataFrame(report_data)
     
-    # 2. Tampilkan filter
     unique_kelas = sorted(df_report['Kelas'].unique().tolist())
     kelas_filter_report = st.selectbox("Filter Laporan Berdasarkan Kelas", ["Semua Kelas"] + unique_kelas, key="kelas_filter_report")
 
@@ -290,7 +276,6 @@ def show_report_table():
     else:
         df_display = df_report
 
-    # 3. Urutkan dan Tampilkan
     df_display = df_display.sort_values(by='Kelas')
     st.dataframe(df_display, use_container_width=True)
 
@@ -313,7 +298,6 @@ def show_progress_report():
         st.warning("Data murid kosong. Tidak ada laporan yang ditampilkan.")
         return
 
-    # 1. Ambil daftar murid untuk selectbox
     murid_options = ['Pilih Murid'] + sorted([
         f"{row['Nama_Murid']} - NIS: {row['NIS']} (Kelas: {row['Kelas']})"
         for index, row in df_murid.iterrows()
@@ -324,12 +308,10 @@ def show_progress_report():
     if selected_murid_display == 'Pilih Murid':
         return
 
-    # Ekstrak ID_MURID (NIS)
     nis_part = selected_murid_display.split(" - NIS: ")[1].split(" (Kelas: ")[0]
     student_id = nis_part
     student_name = selected_murid_display.split(" - NIS: ")[0]
     
-    # --- Detail Murid ---
     st.markdown(f"#### Progres {student_name}")
     murid_data = df_murid[df_murid['ID_MURID'] == student_id].iloc[0]
     col_info1, col_info2, col_info3 = st.columns(3)
@@ -337,10 +319,8 @@ def show_progress_report():
     col_info2.metric("NIS", murid_data['NIS'])
     col_info3.metric("Tanggal Daftar", murid_data['Tanggal_Daftar'].split(' ')[0])
 
-    # --- Ringkasan Hafalan ---
     df_m = df_hafalan[df_hafalan['ID_MURID'] == student_id]
     
-    # Status
     lulus_count = calculate_lulus_count(df_hafalan, student_id)
     surah_done_count = df_m['Surah'].nunique()
     surah_total = len(SURAH_NAMES)
@@ -352,12 +332,10 @@ def show_progress_report():
     sisa = surah_total - surah_done_count
     col_stat3.metric("Sisa Surah", f"{sisa} Surah")
 
-    # --- Grafik Progres (Optional - Sederhana) ---
     progress_val = (surah_done_count / surah_total)
     st.progress(progress_val)
     st.markdown(f"Progres total: **{progress_val * 100:.1f}%**")
 
-    # --- Detail Riwayat Hafalan ---
     st.markdown("##### Riwayat Detail Hafalan")
     if df_m.empty:
         st.info("Murid ini belum memiliki catatan hafalan.")
@@ -365,7 +343,6 @@ def show_progress_report():
         df_riwayat_display = df_m.sort_values(by='Tanggal', ascending=False)
         st.dataframe(df_riwayat_display[['Tanggal', 'Surah', 'Ayat_Awal', 'Ayat_Akhir', 'Status', 'Catatan', 'ID_HAFALAN']], use_container_width=True)
 
-        # Hapus Catatan Hafalan Individu
         st.markdown("##### Hapus Catatan Hafalan Tertentu")
         hafalan_to_delete = st.selectbox(
             "Pilih ID Catatan Hafalan yang Akan Dihapus",
@@ -397,7 +374,7 @@ def main():
     # Menampilkan total murid di sidebar
     st.sidebar.metric("Total Murid Terdaftar", total_murid)
     
-    # Navigasi dengan ikon dan NAMA MENU YANG PERSIS SEPERTI DI GAMBAR
+    # FIX: Hapus argumen 'icons' untuk mengatasi TypeError
     menu = st.sidebar.radio(
         "Pilih Halaman",
         [
@@ -405,12 +382,6 @@ def main():
             "LAPORAN PROGRES INDIVIDU", 
             "TABEL RINGKASAN", 
             "MANAJEMEN MURID"
-        ],
-        icons=[
-            'journal-text', # Input Hafalan
-            'person-check',  # Laporan Progres Individu
-            'table',         # Tabel Ringkasan
-            'person-plus'    # Manajemen Murid
         ],
         key="main_menu_radio"
     )
