@@ -30,16 +30,6 @@ st.set_page_config(
 def add_new_hafalan(student_id, surah_name, ayat_awal, ayat_akhir, status, catatan):
     """Menambahkan catatan hafalan baru ke DataFrame."""
     df_hafalan = st.session_state.df_hafalan.copy()
-    
-    # Cek duplikasi: Hafalan dengan Surah yang sama untuk murid yang sama
-    is_duplicate = (
-        (df_hafalan['ID_MURID'] == student_id) & 
-        (df_hafalan['Surah'] == surah_name)
-    ).any()
-
-    if is_duplicate:
-        st.warning(f"Catatan hafalan Surah **{surah_name}** untuk murid ini sudah ada. Harap hapus catatan lama jika ingin menambahkan yang baru.")
-        return
 
     new_hafalan = pd.DataFrame([{
         'ID_HAFALAN': str(uuid.uuid4()),
@@ -73,7 +63,7 @@ def delete_hafalan(hafalan_id):
 
 def show_add_hafalan_form():
     """Tampilkan form untuk input hafalan baru."""
-    st.subheader("Input Hafalan Murid Baru")
+    st.header("📝 Input Hafalan Murid Baru")
     
     df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
@@ -147,21 +137,31 @@ def show_add_hafalan_form():
         st.dataframe(df_riwayat[['Tanggal', 'Surah', 'Ayat_Awal', 'Ayat_Akhir', 'Status', 'Catatan']], use_container_width=True)
 
 def show_manage_student_form():
-    """Tampilkan form untuk menambahkan/menghapus murid (via input atau CSV)"""
-    st.subheader("Manajemen Murid (Tambah / Hapus)")
+    """Tampilkan form untuk menambahkan/menghapus murid (via input atau CSV) dengan tata letak kolom."""
+    st.header("➕ Manajemen Murid") 
     
     df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
 
     tab1, tab2, tab3 = st.tabs(["Tambah Murid Baru", "Upload CSV Murid", "Hapus Murid"])
 
+    # === TAB 1: TAMBAH MURID BARU ===
     with tab1:
         st.markdown("##### Input Murid Satuan")
         with st.form("add_student_form", clear_on_submit=True):
-            nama = st.text_input("Nama Murid*", key="nama_murid_input")
-            kelas = st.text_input("Kelas*", help="Contoh: VII A, VIII B, IX C", key="kelas_input")
-            nis = st.text_input("NIS/Nomor Induk Siswa*", key="nis_input")
-            nama_wali = st.text_input("Nama Wali", key="nama_wali_input")
+            
+            # Kolom 1
+            col_a, col_b = st.columns(2)
+            with col_a:
+                nama = st.text_input("Nama Murid*", key="nama_murid_input")
+                kelas = st.text_input("Kelas*", help="Contoh: VII A, VIII B, IX C", key="kelas_input")
+            
+            # Kolom 2
+            with col_b:
+                nis = st.text_input("NIS/Nomor Induk Siswa*", key="nis_input")
+                nama_wali = st.text_input("Nama Wali", key="nama_wali_input")
+
+            # Input di bawah kolom
             kontak_wali = st.text_input("Kontak Wali (Telp/WA)", key="kontak_wali_input")
             
             if st.form_submit_button("Tambahkan Murid"):
@@ -170,6 +170,7 @@ def show_manage_student_form():
                 else:
                     st.error("Nama Murid, Kelas, dan NIS wajib diisi.")
 
+    # === TAB 2: UPLOAD CSV MURID ===
     with tab2:
         st.markdown("##### Upload Murid Massal via CSV")
         st.info("File CSV harus menggunakan pemisah **titik koma (;) atau koma (,)** dan memiliki kolom wajib: `Nama_Murid`, `Kelas`, `NIS`.")
@@ -179,6 +180,7 @@ def show_manage_student_form():
             if st.button("Proses dan Tambahkan Murid dari CSV", key="upload_csv_button"):
                 upload_students_csv(uploaded_file, df_murid.copy())
     
+    # === TAB 3: HAPUS MURID ===
     with tab3:
         st.markdown("##### Hapus Murid")
         if df_murid.empty:
@@ -214,6 +216,7 @@ def show_manage_student_form():
             
             # Ekstrak NIS/ID_MURID
             try:
+                # Mencari NIS di akhir string
                 nis_part = selected_display_string.split(" - NIS: ")[1]
                 student_id_to_delete = nis_part
                 student_name_to_delete = selected_display_string.split(' - Kelas:')[0] 
@@ -230,7 +233,7 @@ def show_manage_student_form():
 
 def show_report_table():
     """Tampilkan ringkasan data hafalan dalam bentuk tabel."""
-    st.subheader("Tabel Ringkasan Hafalan Seluruh Murid")
+    st.header("📋 TABEL RINGKASAN") # Nama disesuaikan
     
     df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
@@ -259,7 +262,12 @@ def show_report_table():
         progress_percentage = (surah_done_count / len(SURAH_NAMES)) * 100 if len(SURAH_NAMES) > 0 else 0
         
         # Ambil catatan terakhir
-        last_note = df_m.sort_values(by='Tanggal', ascending=False)['Catatan'].iloc[0] if not df_m.empty and df_m['Catatan'].iloc[0] else "-"
+        # Pastikan tidak error jika catatan kosong atau DF kosong
+        last_note = "-"
+        if not df_m.empty:
+            df_m_sorted = df_m.sort_values(by='Tanggal', ascending=False)
+            if not df_m_sorted['Catatan'].iloc[0] is None:
+                last_note = df_m_sorted['Catatan'].iloc[0] if df_m_sorted['Catatan'].iloc[0] != '' else "-"
         
         report_data.append({
             'Nama Murid': murid['Nama_Murid'],
@@ -296,7 +304,7 @@ def show_report_table():
 
 def show_progress_report():
     """Tampilkan visualisasi dan detail progres per murid."""
-    st.subheader("Laporan Progres Individu & Detail Hafalan")
+    st.header("🧑‍🎓 LAPORAN PROGRES INDIVIDU") # Nama disesuaikan
     
     df_murid = st.session_state.df_murid
     df_hafalan = st.session_state.df_hafalan
@@ -380,28 +388,43 @@ def main():
     
     # Sidebar
     st.sidebar.title("Menu Aplikasi")
+    st.sidebar.markdown("---")
     
     # Ambil data murid untuk statistik sidebar
     df_murid = st.session_state.df_murid
     total_murid = len(df_murid)
     
-    st.sidebar.metric("Total Murid", total_murid)
+    # Menampilkan total murid di sidebar
+    st.sidebar.metric("Total Murid Terdaftar", total_murid)
     
+    # Navigasi dengan ikon dan NAMA MENU YANG PERSIS SEPERTI DI GAMBAR
     menu = st.sidebar.radio(
         "Pilih Halaman",
-        ["Input Hafalan", "Laporan Progres Individu", "Tabel Ringkasan", "Manajemen Murid"]
+        [
+            "INPUT HAFALAN", 
+            "LAPORAN PROGRES INDIVIDU", 
+            "TABEL RINGKASAN", 
+            "MANAJEMEN MURID"
+        ],
+        icons=[
+            'journal-text', # Input Hafalan
+            'person-check',  # Laporan Progres Individu
+            'table',         # Tabel Ringkasan
+            'person-plus'    # Manajemen Murid
+        ],
+        key="main_menu_radio"
     )
     
-    st.title("📝 Pencatatan Hafalan Juz Amma")
+    st.title("📚 Sistem Pencatatan Hafalan Juz Amma")
     st.markdown("---")
 
-    if menu == "Input Hafalan":
+    if menu == "INPUT HAFALAN":
         show_add_hafalan_form()
-    elif menu == "Laporan Progres Individu":
+    elif menu == "LAPORAN PROGRES INDIVIDU":
         show_progress_report()
-    elif menu == "Tabel Ringkasan":
+    elif menu == "TABEL RINGKASAN":
         show_report_table()
-    elif menu == "Manajemen Murid":
+    elif menu == "MANAJEMEN MURID":
         show_manage_student_form()
 
 if __name__ == "__main__":
