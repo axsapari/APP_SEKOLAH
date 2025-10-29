@@ -111,17 +111,51 @@ def upload_students_csv(uploaded_file, df_murid_copy):
         # PERBAIKAN BOM: Menambahkan encoding='utf-8-sig' untuk menangani Byte Order Mark
         df_upload = pd.read_csv(uploaded_file, sep=';', encoding='utf-8-sig')
         
-        # --- PERBAIKAN: Hapus spasi/karakter tak terlihat dari nama kolom ---
+        # --- PERBAIKAN KOLOM: Lakukan pembersihan nama kolom secara agresif ---
+        # 1. Hapus spasi di awal/akhir
         df_upload.columns = df_upload.columns.str.strip()
+        # 2. Ganti spasi, titik, atau karakter non-standar lainnya di tengah dengan underscore (atau hapus)
+        # Di sini, kita hanya fokus pada pembersihan ekstrem untuk memastikan kolom terdeteksi.
+        # Kita buat kolom yang dibersihkan (hanya huruf, angka, dan underscore)
+        cleaned_column_map = {}
+        for col in df_upload.columns:
+            # Pilihan 1: Hapus semua karakter yang bukan huruf/angka/spasi, lalu strip spasi (paling aman)
+            cleaned_name = ''.join(c for c in col if c.isalnum() or c == '_').strip()
+            if cleaned_name != col:
+                 cleaned_column_map[col] = cleaned_name
+
+        # Mapping: Hapus spasi dan karakter khusus lainnya (agresif)
+        df_upload.columns = [col.strip().replace(' ', '_').replace('.', '').replace('-', '_') for col in df_upload.columns]
+        
+        # Mapping nama kolom yang dibersihkan kembali ke nama standar
+        # Misalnya, jika file punya "Nama Murid", kita ubah jadi "Nama_Murid"
+        df_upload.rename(columns={
+            'Nama_Murid': 'Nama_Murid', 
+            'NamaMurid': 'Nama_Murid', # Handle jika user menghilangkan underscore
+            'Kelas': 'Kelas', 
+            'NIS': 'NIS'
+        }, inplace=True, errors='ignore')
         
         # 1. Pastikan kolom wajib ada
         required_cols = ['Nama_Murid', 'Kelas', 'NIS']
-        for col in required_cols:
-            if col not in df_upload.columns:
-                st.error(f"File CSV harus memiliki kolom wajib: {', '.join(required_cols)}. Kolom '{col}' tidak ditemukan.")
-                # Tampilkan kolom yang terdeteksi untuk debugging
-                st.info(f"Kolom yang terdeteksi di file Anda: {list(df_upload.columns)}")
-                return
+        
+        missing_cols = [col for col in required_cols if col not in df_upload.columns]
+        
+        if missing_cols:
+            st.error(f"File CSV harus memiliki kolom wajib: {', '.join(required_cols)}. Kolom hilang: {', '.join(missing_cols)}.")
+            # Tampilkan kolom yang terdeteksi untuk debugging
+            st.info(f"Kolom yang terdeteksi di file Anda setelah pembersihan: {list(df_upload.columns)}")
+            
+            # Tambahan: Cek delimiter alternatif
+            try:
+                # Coba baca dengan koma (,)
+                df_comma = pd.read_csv(uploaded_file, sep=',', encoding='utf-8-sig')
+                if any(col in df_comma.columns.str.strip().tolist() for col in required_cols):
+                     st.warning("Peringatan: Kami menduga file Anda menggunakan **koma (,)** sebagai pemisah, bukan titik koma (;). Silakan ganti pemisah di file CSV Anda menjadi titik koma (;) atau unggah ulang dengan file CSV standar.")
+            except Exception:
+                pass # Abaikan jika gagal
+            
+            return
         
         # Tambahkan kolom opsional jika tidak ada
         for col in ['Nama_Wali', 'Kontak_Wali']:
