@@ -809,6 +809,7 @@ def sidebar_controls(df):
         "Dashboard & Laporan",
         "📜 Riwayat Setoran",
         "📅 Laporan Bulanan",
+        "📆 Laporan Tahunan (YTD)",
         "👤 Profil Murid",
         "🏫 Pantauan Kelas",
     ],
@@ -956,8 +957,13 @@ def main_app():
 
     elif menu == "📅 Laporan Bulanan":
         page_laporan_bulanan()
+        
+    elif menu == "📆 Laporan Tahunan (YTD)":
+        page_laporan_tahunan()
+    
     elif menu == "👤 Profil Murid":
         page_profil_murid(df)
+        
     elif menu == "🏫 Pantauan Kelas":
         page_pantauan_kelas(df)
 # =============================
@@ -1067,6 +1073,7 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
 
