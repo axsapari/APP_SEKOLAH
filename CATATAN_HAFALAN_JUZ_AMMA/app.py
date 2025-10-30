@@ -1,4 +1,3 @@
-saya tempel semua kode nya tolong kamu evaluasi:
 import streamlit as st
 import pandas as pd
 import json
@@ -848,16 +847,14 @@ def sidebar_controls(df):
         """
     )
 
-    return menu, selected_class, selected_guru
-
+    # ====================
+    # ADMIN GURU (CRUD) + ADMIN MURID
+    # ====================
 
     # Pilih kelas
     kelas_list = ["Pilih Kelas"] + sorted(df['Kelas'].unique().tolist())
     selected_class = st.sidebar.selectbox("Kelas", kelas_list, key="kelas_filter")
 
-    # ====================
-    # ADMIN GURU (CRUD)
-    # ====================
     st.sidebar.markdown("---")
     st.sidebar.title("🛠️ Administrasi Data Murid")
     st.sidebar.caption("Kelola data murid (tambah, impor, hapus).")
@@ -967,7 +964,7 @@ def sidebar_controls(df):
         """
     )
 
-    
+    # return tunggal di paling bawah fungsi
     return menu, selected_class, selected_guru
 
 # =============================
@@ -1002,6 +999,7 @@ def main_app():
         
     elif menu == "🏫 Pantauan Kelas":
         page_pantauan_kelas(df)
+
 # =============================
 # HALAMAN BARU: 👤 PROFIL MURID
 # =============================
