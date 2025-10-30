@@ -644,6 +644,113 @@ def page_laporan_bulanan():
     laporan_df = pd.DataFrame(hasil_data)
     st.dataframe(laporan_df, use_container_width=True)
 
+    # LAPORAN TAHUNAN YTD
+
+    def page_laporan_tahunan():
+    st.header("📆 Laporan Tahunan (Year-to-Date) Hafalan Juz Amma")
+
+    if not os.path.exists(LOG_FILE) or not os.path.exists(DB_FILE):
+        st.warning("Data hafalan belum lengkap (log atau database tidak ditemukan).")
+        return
+
+    df_log = pd.read_csv(LOG_FILE)
+    df_data = pd.read_csv(DB_FILE)
+
+    if df_log.empty or df_data.empty:
+        st.warning("Belum ada data untuk ditampilkan.")
+        return
+
+    df_log["Timestamp"] = pd.to_datetime(df_log["Timestamp"], errors="coerce")
+    df_log = df_log.dropna(subset=["Timestamp"])
+    df_log["Tahun"] = df_log["Timestamp"].dt.year
+    tahun_ini = datetime.now().year
+
+    df_log_tahun = df_log[df_log["Tahun"] == tahun_ini].copy()
+    if df_log_tahun.empty:
+        st.info(f"Belum ada data setoran untuk tahun {tahun_ini}.")
+        return
+
+    hasil = []
+    for _, murid in df_data.iterrows():
+        murid_log = df_log_tahun[df_log_tahun["ID_Murid"] == murid["ID_Murid"]]
+        if murid_log.empty:
+            continue
+
+        jumlah_setoran = len(murid_log)
+        jumlah_lulus = (murid_log["Status"] == "Lulus").sum()
+        jumlah_mengulang = (murid_log["Status"] == "Mengulang").sum()
+
+        # total ayat lulus kumulatif
+        df_lulus = murid_log[murid_log["Status"] == "Lulus"].copy()
+        df_lulus["Jumlah_Ayat"] = df_lulus["Ayat_Sampai"] - df_lulus["Ayat_Dari"] + 1
+        total_ayat_lulus = df_lulus["Jumlah_Ayat"].sum()
+        persen = round((total_ayat_lulus / TOTAL_AYAT_JUZ_AMMA) * 100, 2)
+
+        # ambil surah yang sudah lulus penuh dari data utama
+        try:
+            status_dict = json.loads(murid["Status_Hafalan"])
+            surah_lulus = [
+                s for s, a in status_dict.items() if all(x == 1 for x in a) and len(a) > 0
+            ]
+        except Exception:
+            surah_lulus = []
+
+        hasil.append({
+            "NIS": murid.get("NIS", ""),
+            "Nama": murid["Nama_Murid"],
+            "Kelas": murid["Kelas"],
+            "Jumlah Setoran Tahun Ini": jumlah_setoran,
+            "Jumlah Lulus": jumlah_lulus,
+            "Jumlah Mengulang": jumlah_mengulang,
+            "% Hafalan Juz Amma": persen,
+            "Surah Lulus": ", ".join(surah_lulus) if surah_lulus else "-",
+        })
+
+    laporan_df = pd.DataFrame(hasil)
+    st.dataframe(laporan_df, use_container_width=True)
+
+    # === Simpan Excel ===
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        sheet_name = f"Laporan {tahun_ini}"
+        laporan_df.to_excel(writer, sheet_name=sheet_name, index=False, startrow=2)
+        sheet = writer.sheets[sheet_name]
+
+        sheet["A1"] = f"Laporan Tahunan Hafalan Juz Amma - Tahun {tahun_ini}"
+        sheet["A1"].font = Font(size=14, bold=True)
+        sheet["A1"].alignment = Alignment(horizontal="center")
+
+        max_col = len(laporan_df.columns)
+        sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_col)
+
+        # format header tabel
+        for col_cells in sheet.iter_cols(min_row=3, max_row=3):
+            for cell in col_cells:
+                cell.font = Font(bold=True)
+                cell.alignment = Alignment(horizontal="center")
+
+        # lebar kolom otomatis
+        from openpyxl.cell.cell import MergedCell
+        for column_cells in sheet.columns:
+            first_real_cell = next((cell for cell in column_cells if not isinstance(cell, MergedCell)), None)
+            if first_real_cell is None:
+                continue
+            column_letter = first_real_cell.column_letter
+            length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+            sheet.column_dimensions[column_letter].width = length + 3
+
+    file_name = f"Laporan_Hafalan_Tahunan_{tahun_ini}.xlsx"
+    st.download_button(
+        label="📥 Unduh Laporan Tahunan (Excel)",
+        data=output.getvalue(),
+        file_name=file_name,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
     # --------------------------
     # SIMPAN SEBAGAI EXCEL (XLSX)
     # --------------------------
@@ -960,6 +1067,7 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
 
