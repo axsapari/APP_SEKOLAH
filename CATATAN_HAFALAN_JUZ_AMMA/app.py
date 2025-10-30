@@ -932,6 +932,17 @@ def sidebar_controls(df):
             else:
                 st.warning("Murid yang dipilih tidak dapat diidentifikasi. Coba filter ulang.")
 
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(
+        """
+        **Aplikasi Hafalan Juz Amma**  
+        _SMP Negeri 9 Banjar_  
+        Pengembang: **Agus Sugiharto Sapari, S.Pd.**  
+        © 2025
+        """
+    )
+
+    
     return menu, selected_class, selected_guru
 
 # =============================
@@ -1090,6 +1101,7 @@ if __name__ == "__main__":
         initialize_database(DB_FILE)
     main_app()
     show_footer()
+
 
 
 
