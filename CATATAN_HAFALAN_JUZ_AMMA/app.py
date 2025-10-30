@@ -807,14 +807,12 @@ def page_laporan_tahunan():
 def sidebar_controls(df):
     st.sidebar.title("Navigasi")
 
-    # --- tampilkan logo sekolah jika ada ---
     logo_path = os.path.join(BASE_DIR, "logo.png")
     if os.path.exists(logo_path):
         st.sidebar.image(logo_path, width=120)
     else:
         st.sidebar.markdown("**SMP Negeri 9 Banjar**")
 
-    # --- menu utama aplikasi ---
     menu = st.sidebar.radio(
         "Pilih Tampilan",
         [
@@ -829,14 +827,11 @@ def sidebar_controls(df):
         ],
     )
 
-    # --- pilih guru dan kelas ---
     guru_list = load_guru_list()
     selected_guru = st.sidebar.selectbox("Nama Guru Pencatat", guru_list)
-
     kelas_list = ["Pilih Kelas"] + sorted(df["Kelas"].unique().tolist())
     selected_class = st.sidebar.selectbox("Kelas", kelas_list)
 
-    # --- identitas sekolah di sidebar ---
     st.sidebar.markdown("---")
     st.sidebar.markdown(
         """
@@ -848,24 +843,17 @@ def sidebar_controls(df):
     )
 
     # ====================
-    # ADMIN GURU (CRUD)
+    # ADMINISTRASI DATA MURID
     # ====================
     st.sidebar.markdown("---")
     st.sidebar.title("🛠️ Administrasi Data Murid")
     st.sidebar.caption("Kelola data murid (tambah, impor, hapus).")
 
-    # Pilih kelas
-    kelas_list = ["Pilih Kelas"] + sorted(df['Kelas'].unique().tolist())
-    selected_class = st.sidebar.selectbox("Kelas", kelas_list, key="kelas_filter")
-
-    # Tambah murid baru manual
     with st.sidebar.expander("➕ Tambah Murid Baru (Manual)"):
         with st.form("add_student_form"):
             new_name = st.text_input("Nama Lengkap Murid", max_chars=100)
             new_nis = st.text_input("Nomor Induk Siswa (NIS)", max_chars=20, value="")
-            existing_classes = (
-                sorted(df['Kelas'].unique().tolist()) if not df.empty else []
-            )
+            existing_classes = sorted(df["Kelas"].unique().tolist()) if not df.empty else []
             new_kelas = st.text_input(
                 "Kelas (contoh: VII-A, VIII-B)",
                 max_chars=10,
@@ -879,47 +867,39 @@ def sidebar_controls(df):
                 else:
                     st.error("Nama dan Kelas tidak boleh kosong.")
 
-    # Impor massal CSV
     with st.sidebar.expander("⬆️ Impor Massal (CSV)"):
         st.markdown(
             "**Kolom wajib:** `Nama_Murid`, `Kelas`.\n\n"
             "**Opsional:** `NIS`.\n\n"
             "Gunakan pemisah `;` (titik koma)."
         )
-        uploaded_file = st.file_uploader(
-            "Pilih file CSV", type=["csv"], key="csv_uploader"
-        )
+        uploaded_file = st.file_uploader("Pilih file CSV", type=["csv"], key="csv_uploader")
         if uploaded_file is not None:
             if st.button("Proses Impor Data"):
                 import_students_from_csv(uploaded_file)
                 st.rerun()
 
-    # Hapus murid permanen
     with st.sidebar.expander("🗑️ Hapus Murid"):
         st.warning("PERINGATAN: Penghapusan permanen. Tidak bisa dibatalkan.")
-
         delete_df = df.copy()
-        existing_classes_delete = (
-            sorted(delete_df['Kelas'].unique().tolist()) if not delete_df.empty else []
-        )
+        existing_classes_delete = sorted(delete_df["Kelas"].unique().tolist()) if not delete_df.empty else []
         delete_class_filter = st.selectbox(
             "Filter Berdasarkan Kelas",
-            ['Semua Kelas'] + existing_classes_delete,
+            ["Semua Kelas"] + existing_classes_delete,
             key="delete_class_filter",
         )
-
         filtered_delete_df = delete_df
-        if delete_class_filter != 'Semua Kelas':
-            filtered_delete_df = delete_df[delete_df['Kelas'] == delete_class_filter].copy()
+        if delete_class_filter != "Semua Kelas":
+            filtered_delete_df = delete_df[delete_df["Kelas"] == delete_class_filter].copy()
 
         internal_delete_map = {}
         for _, row in filtered_delete_df.iterrows():
             internal_key = f"{row['Nama_Murid']} - Kelas: {row['Kelas']} |ID:{row['ID_Murid']}"
-            internal_delete_map[internal_key] = row['ID_Murid']
+            internal_delete_map[internal_key] = row["ID_Murid"]
 
         sorted_internal_keys = sorted(internal_delete_map.keys())
-        display_list_delete = ['Pilih Murid yang Akan Dihapus'] + [
-            key.rsplit(' |ID:', 1)[0] for key in sorted_internal_keys
+        display_list_delete = ["Pilih Murid yang Akan Dihapus"] + [
+            key.rsplit(" |ID:", 1)[0] for key in sorted_internal_keys
         ]
 
         selected_display_string = st.selectbox(
@@ -928,19 +908,19 @@ def sidebar_controls(df):
             key="delete_student_select",
         )
 
-        if selected_display_string != 'Pilih Murid yang Akan Dihapus':
-            # Cocokkan lagi ke internal key
+        if selected_display_string != "Pilih Murid yang Akan Dihapus":
             start_of_internal_key = selected_display_string
             found_key = next(
                 (
-                    key for key in sorted_internal_keys
-                    if key.startswith(start_of_internal_key + ' |ID:')
+                    key
+                    for key in sorted_internal_keys
+                    if key.startswith(start_of_internal_key + " |ID:")
                 ),
                 None,
             )
             if found_key:
                 student_id_to_delete = internal_delete_map[found_key]
-                student_name_to_delete = selected_display_string.split(' - Kelas:')[0]
+                student_name_to_delete = selected_display_string.split(" - Kelas:")[0]
                 st.error(
                     f"Anda yakin ingin menghapus **{student_name_to_delete}** (ID: {student_id_to_delete}) secara permanen?"
                 )
@@ -948,7 +928,11 @@ def sidebar_controls(df):
                     f"✅ KONFIRMASI HAPUS {student_name_to_delete}",
                     key="confirm_delete_button",
                 ):
-                    delete_student(st.session_state.df.copy(), student_id_to_delete, student_name_to_delete)
+                    delete_student(
+                        st.session_state.df.copy(),
+                        student_id_to_delete,
+                        student_name_to_delete,
+                    )
                     st.rerun()
             else:
                 st.warning("Murid yang dipilih tidak dapat diidentifikasi. Coba filter ulang.")
@@ -963,8 +947,8 @@ def sidebar_controls(df):
         """
     )
 
-    # <- return satu-satunya dipindahkan ke akhir fungsi
     return menu, selected_class, selected_guru
+
 # =============================
 # MAIN APP FLOW
 # =============================
@@ -1121,6 +1105,7 @@ if __name__ == "__main__":
         initialize_database(DB_FILE)
     main_app()
     show_footer()
+
 
 
 
