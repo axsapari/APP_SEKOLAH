@@ -832,7 +832,6 @@ def sidebar_controls(df):
     kelas_list = ["Pilih Kelas"] + sorted(df["Kelas"].unique().tolist())
     selected_class = st.sidebar.selectbox("Kelas", kelas_list)
 
-    )
 
     # ====================
     # ADMIN GURU (CRUD) + ADMIN MURID
@@ -1111,5 +1110,6 @@ if __name__ == "__main__":
         initialize_database(DB_FILE)
     main_app()
     show_footer()
+
 
 
