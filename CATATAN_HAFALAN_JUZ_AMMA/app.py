@@ -805,37 +805,51 @@ def page_laporan_tahunan():
 # =============================
 
 def sidebar_controls(df):
-    st.sidebar.title("Navigasi & Filter")
+    st.sidebar.title("Navigasi")
+
+    # --- tampilkan logo sekolah jika ada ---
     logo_path = os.path.join(BASE_DIR, "logo.png")
     if os.path.exists(logo_path):
         st.sidebar.image(logo_path, width=120)
     else:
         st.sidebar.markdown("**SMP Negeri 9 Banjar**")
 
-        menu = st.sidebar.radio(
-    "Pilih Tampilan",
-    [
-        "Pencatatan Hafalan",
-        "Rekap Per Surah",
-        "Dashboard & Laporan",
-        "📜 Riwayat Setoran",
-        "📅 Laporan Bulanan",
-        "📆 Laporan Tahunan (YTD)",
-        "👤 Profil Murid",
-        "🏫 Pantauan Kelas",
-    ],
-)
-
-
-    # Dropdown guru pencatat dari CSV guru_list.csv
-    st.sidebar.markdown("---")
-    st.sidebar.title("Guru Pencatat")
-    guru_list = load_guru_list()
-    selected_guru = st.sidebar.selectbox(
-        "Nama Guru yang Mencatat Setoran",
-        guru_list,
-        key="nama_guru_pencatat",
+    # --- menu utama aplikasi ---
+    menu = st.sidebar.radio(
+        "Pilih Tampilan",
+        [
+            "Pencatatan Hafalan",
+            "Rekap Per Surah",
+            "Dashboard & Laporan",
+            "📜 Riwayat Setoran",
+            "📅 Laporan Bulanan",
+            "📆 Laporan Tahunan (YTD)",
+            "👤 Profil Murid",
+            "🏫 Pantauan Kelas",
+        ],
     )
+
+    # --- pilih guru dan kelas ---
+    guru_list = load_guru_list()
+    selected_guru = st.sidebar.selectbox("Nama Guru Pencatat", guru_list)
+
+    kelas_list = ["Pilih Kelas"] + sorted(df["Kelas"].unique().tolist())
+    selected_class = st.sidebar.selectbox("Kelas", kelas_list)
+
+    # --- identitas sekolah di sidebar ---
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(
+        """
+        **Aplikasi Hafalan Juz Amma**  
+        _SMP Negeri 9 Banjar_  
+        Pengembang: **Agus Sugiharto Sapari, S.Pd.**  
+        © 2025
+        """
+    )
+
+    # --- nilai yang dikembalikan ke fungsi utama ---
+    return menu, selected_class, selected_guru
+
 
     # Pilih kelas
     kelas_list = ["Pilih Kelas"] + sorted(df['Kelas'].unique().tolist())
@@ -1112,6 +1126,7 @@ if __name__ == "__main__":
         initialize_database(DB_FILE)
     main_app()
     show_footer()
+
 
 
 
