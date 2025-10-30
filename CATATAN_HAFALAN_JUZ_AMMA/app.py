@@ -666,16 +666,17 @@ def page_laporan_bulanan():
         max_col = len(laporan_df.columns)
         sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_col)
 
-        # Format header tabel
-        for col_cells in sheet.iter_cols(min_row=3, max_row=3):
-            for cell in col_cells:
-                cell.font = Font(bold=True)
-                cell.alignment = Alignment(horizontal="center")
+    # Lebarkan kolom otomatis — skip sel merge agar tidak error
+    from openpyxl.cell.cell import MergedCell
 
-        # Lebarkan kolom otomatis
-        for column_cells in sheet.columns:
-            length = max(len(str(cell.value)) for cell in column_cells)
-            sheet.column_dimensions[column_cells[0].column_letter].width = length + 3
+    for column_cells in sheet.columns:
+        # ambil huruf kolom dari sel pertama yang BUKAN merged
+        first_real_cell = next((cell for cell in column_cells if not isinstance(cell, MergedCell)), None)
+        if first_real_cell is None:
+            continue
+        column_letter = first_real_cell.column_letter
+        length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+        sheet.column_dimensions[column_letter].width = length + 3
 
     file_name = f"Laporan_Hafalan_{bulan_text}_{tahun_text}.xlsx"
 
@@ -959,6 +960,7 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
 
