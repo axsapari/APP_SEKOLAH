@@ -18,9 +18,14 @@ from juz_amma_data import (
 # =============================
 # KONFIGURASI APLIKASI / FILE
 # =============================
-DB_FILE = "data_hafalan.csv"          # database utama murid + status hafalannya
-GURU_FILE = "guru_list.csv"          # daftar guru pencatat (dropdown)
-LOG_FILE = "log_hafalan.csv"         # riwayat transaksi setoran hafalan
+#DB_FILE = "data_hafalan.csv"          # database utama murid + status hafalannya
+#GURU_FILE = "guru_list.csv"          # daftar guru pencatat (dropdown)
+#LOG_FILE = "log_hafalan.csv"         # riwayat transaksi setoran hafalan
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, "data_hafalan.csv")
+GURU_FILE = os.path.join(BASE_DIR, "guru_list.csv")
+LOG_FILE = os.path.join(BASE_DIR, "log_hafalan.csv")
 
 # Pastikan file CSV penting tersedia
 for filename, header in [
@@ -916,5 +921,6 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
