@@ -26,6 +26,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "data_hafalan.csv")
 GURU_FILE = os.path.join(BASE_DIR, "guru_list.csv")
 LOG_FILE = os.path.join(BASE_DIR, "log_hafalan.csv")
+logo_path = os.path.join(BASE_DIR, "logo.png")
+
+if os.path.exists(logo_path):
+    st.sidebar.image(logo_path, width=120)
+else:
+    st.sidebar.markdown("**SMP Negeri 9 Banjar**")
 
 # Pastikan file CSV penting tersedia
 for filename, header in [
@@ -1102,6 +1108,7 @@ if __name__ == "__main__":
         initialize_database(DB_FILE)
     main_app()
     show_footer()
+
 
 
 
