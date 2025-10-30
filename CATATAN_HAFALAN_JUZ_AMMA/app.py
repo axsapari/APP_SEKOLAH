@@ -836,18 +836,7 @@ def sidebar_controls(df):
     kelas_list = ["Pilih Kelas"] + sorted(df["Kelas"].unique().tolist())
     selected_class = st.sidebar.selectbox("Kelas", kelas_list)
 
-    # --- identitas sekolah di sidebar ---
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(
-        """
-        **Aplikasi Hafalan Juz Amma**  
-        _SMP Negeri 9 Banjar_  
-        Pengembang: **Agus Sugiharto Sapari, S.Pd.**  
-        © 2025
-        """
-    )
 
-    return menu, selected_class, selected_guru
 
 
     # Pilih kelas
@@ -1125,6 +1114,7 @@ if __name__ == "__main__":
         initialize_database(DB_FILE)
     main_app()
     show_footer()
+
 
 
 
