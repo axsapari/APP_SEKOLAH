@@ -1069,10 +1069,29 @@ def page_pantauan_kelas(df):
 # =============================
 # ENTRY POINT
 # =============================
+
+def show_footer():
+    st.markdown(
+        """
+        <hr style="margin-top: 40px; margin-bottom: 10px;">
+
+        <div style="text-align: center; font-size: 14px; color: #555;">
+            <strong>Aplikasi Catatan Hafalan Juz Amma</strong><br>
+            SMP Negeri 9 Banjar<br>
+            <em>Dikembangkan oleh:</em> Agus Sugiharto Sapari, S.Pd.<br>
+            © 2025 SMP Negeri 9 Banjar. Seluruh hak cipta dilindungi.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+    show_footer()
+
+
 
 
 
