@@ -785,7 +785,7 @@ def page_laporan_tahunan():
         length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
         sheet.column_dimensions[column_letter].width = length + 3
 
-    file_name = f"Laporan_Hafalan_{bulan_text}_{tahun_text}.xlsx"
+    file_name = f"Laporan_Hafalan_Tahunan_{tahun_ini}.xlsx"
 
     st.download_button(
         label="📥 Unduh Laporan Bulanan (Excel)",
@@ -1073,6 +1073,7 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
 
