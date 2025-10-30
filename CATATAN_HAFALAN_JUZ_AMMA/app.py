@@ -706,17 +706,17 @@ def page_laporan_bulanan():
             "Surah Lulus": ", ".join(surah_lulus) if surah_lulus else "-",
         })
 
-    laporan_df = pd.DataFrame(hasil)
-    st.dataframe(laporan_df, use_container_width=True)
+        laporan_df = pd.DataFrame(hasil)
+        st.dataframe(laporan_df, use_container_width=True)
 
-    # === Simpan Excel ===
-    from io import BytesIO
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment
-    from openpyxl.cell.cell import MergedCell
+        # === Simpan Excel ===
+        from io import BytesIO
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment
+        from openpyxl.cell.cell import MergedCell
 
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
         sheet_name = f"Laporan {tahun_ini}"
         laporan_df.to_excel(writer, sheet_name=sheet_name, index=False, startrow=2)
         sheet = writer.sheets[sheet_name]
@@ -743,8 +743,8 @@ def page_laporan_bulanan():
             length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
             sheet.column_dimensions[column_letter].width = length + 3
 
-    file_name = f"Laporan_Hafalan_Tahunan_{tahun_ini}.xlsx"
-    st.download_button(
+        file_name = f"Laporan_Hafalan_Tahunan_{tahun_ini}.xlsx"
+        st.download_button(
         label="📥 Unduh Laporan Tahunan (Excel)",
         data=output.getvalue(),
         file_name=file_name,
@@ -1074,6 +1074,7 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
 
