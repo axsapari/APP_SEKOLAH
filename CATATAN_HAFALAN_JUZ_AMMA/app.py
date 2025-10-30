@@ -836,12 +836,16 @@ def sidebar_controls(df):
     kelas_list = ["Pilih Kelas"] + sorted(df["Kelas"].unique().tolist())
     selected_class = st.sidebar.selectbox("Kelas", kelas_list)
 
-
-
-
-    # Pilih kelas
-    kelas_list = ["Pilih Kelas"] + sorted(df['Kelas'].unique().tolist())
-    selected_class = st.sidebar.selectbox("Kelas", kelas_list, key="kelas_filter")
+    # --- identitas sekolah di sidebar ---
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(
+        """
+        **Aplikasi Hafalan Juz Amma**  
+        _SMP Negeri 9 Banjar_  
+        Pengembang: **Agus Sugiharto Sapari, S.Pd.**  
+        © 2025
+        """
+    )
 
     # ====================
     # ADMIN GURU (CRUD)
@@ -849,6 +853,10 @@ def sidebar_controls(df):
     st.sidebar.markdown("---")
     st.sidebar.title("🛠️ Administrasi Data Murid")
     st.sidebar.caption("Kelola data murid (tambah, impor, hapus).")
+
+    # Pilih kelas
+    kelas_list = ["Pilih Kelas"] + sorted(df['Kelas'].unique().tolist())
+    selected_class = st.sidebar.selectbox("Kelas", kelas_list, key="kelas_filter")
 
     # Tambah murid baru manual
     with st.sidebar.expander("➕ Tambah Murid Baru (Manual)"):
@@ -955,9 +963,8 @@ def sidebar_controls(df):
         """
     )
 
-    
+    # <- return satu-satunya dipindahkan ke akhir fungsi
     return menu, selected_class, selected_guru
-
 # =============================
 # MAIN APP FLOW
 # =============================
@@ -1114,6 +1121,7 @@ if __name__ == "__main__":
         initialize_database(DB_FILE)
     main_app()
     show_footer()
+
 
 
 
