@@ -807,14 +807,12 @@ def page_laporan_tahunan():
 def sidebar_controls(df):
     st.sidebar.title("Navigasi & Filter")
     logo_path = os.path.join(BASE_DIR, "logo.png")
-
     if os.path.exists(logo_path):
         st.sidebar.image(logo_path, width=120)
     else:
         st.sidebar.markdown("**SMP Negeri 9 Banjar**")
 
-
-    menu = st.sidebar.radio(
+        menu = st.sidebar.radio(
     "Pilih Tampilan",
     [
         "Pencatatan Hafalan",
@@ -1114,6 +1112,7 @@ if __name__ == "__main__":
         initialize_database(DB_FILE)
     main_app()
     show_footer()
+
 
 
 
