@@ -646,32 +646,32 @@ def page_laporan_bulanan():
 
     # LAPORAN TAHUNAN YTD
 
-    def page_laporan_tahunan():
-        st.header("📆 Laporan Tahunan (Year-to-Date) Hafalan Juz Amma")
+def page_laporan_tahunan():
+    st.header("📆 Laporan Tahunan (Year-to-Date) Hafalan Juz Amma")
 
-        if not os.path.exists(LOG_FILE) or not os.path.exists(DB_FILE):
+    if not os.path.exists(LOG_FILE) or not os.path.exists(DB_FILE):
         st.warning("Data hafalan belum lengkap (log atau database tidak ditemukan).")
         return
 
-        df_log = pd.read_csv(LOG_FILE)
-        df_data = pd.read_csv(DB_FILE)
+    df_log = pd.read_csv(LOG_FILE)
+    df_data = pd.read_csv(DB_FILE)
 
-        if df_log.empty or df_data.empty:
+    if df_log.empty or df_data.empty:
         st.warning("Belum ada data untuk ditampilkan.")
         return
 
-        df_log["Timestamp"] = pd.to_datetime(df_log["Timestamp"], errors="coerce")
-        df_log = df_log.dropna(subset=["Timestamp"])
-        df_log["Tahun"] = df_log["Timestamp"].dt.year
-        tahun_ini = datetime.now().year
+    df_log["Timestamp"] = pd.to_datetime(df_log["Timestamp"], errors="coerce")
+    df_log = df_log.dropna(subset=["Timestamp"])
+    df_log["Tahun"] = df_log["Timestamp"].dt.year
+    tahun_ini = datetime.now().year
 
-        df_log_tahun = df_log[df_log["Tahun"] == tahun_ini].copy()
-        if df_log_tahun.empty:
+    df_log_tahun = df_log[df_log["Tahun"] == tahun_ini].copy()
+    if df_log_tahun.empty:
         st.info(f"Belum ada data setoran untuk tahun {tahun_ini}.")
         return
 
-        hasil = []
-        for _, murid in df_data.iterrows():
+    hasil = []
+    for _, murid in df_data.iterrows():
         murid_log = df_log_tahun[df_log_tahun["ID_Murid"] == murid["ID_Murid"]]
         if murid_log.empty:
             continue
@@ -706,17 +706,17 @@ def page_laporan_bulanan():
             "Surah Lulus": ", ".join(surah_lulus) if surah_lulus else "-",
         })
 
-        laporan_df = pd.DataFrame(hasil)
-        st.dataframe(laporan_df, use_container_width=True)
+    laporan_df = pd.DataFrame(hasil)
+    st.dataframe(laporan_df, use_container_width=True)
 
-        # === Simpan Excel ===
-        from io import BytesIO
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, Alignment
-        from openpyxl.cell.cell import MergedCell
+    # === Simpan Excel ===
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment
+    from openpyxl.cell.cell import MergedCell
 
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
         sheet_name = f"Laporan {tahun_ini}"
         laporan_df.to_excel(writer, sheet_name=sheet_name, index=False, startrow=2)
         sheet = writer.sheets[sheet_name]
@@ -743,14 +743,13 @@ def page_laporan_bulanan():
             length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
             sheet.column_dimensions[column_letter].width = length + 3
 
-        file_name = f"Laporan_Hafalan_Tahunan_{tahun_ini}.xlsx"
-        st.download_button(
+    file_name = f"Laporan_Hafalan_Tahunan_{tahun_ini}.xlsx"
+    st.download_button(
         label="📥 Unduh Laporan Tahunan (Excel)",
         data=output.getvalue(),
         file_name=file_name,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-
 
     # --------------------------
     # SIMPAN SEBAGAI EXCEL (XLSX)
@@ -1074,6 +1073,7 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
 
