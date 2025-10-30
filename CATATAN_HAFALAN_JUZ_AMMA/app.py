@@ -22,6 +22,17 @@ DB_FILE = "data_hafalan.csv"          # database utama murid + status hafalannya
 GURU_FILE = "guru_list.csv"          # daftar guru pencatat (dropdown)
 LOG_FILE = "log_hafalan.csv"         # riwayat transaksi setoran hafalan
 
+# Pastikan file CSV penting tersedia
+for filename, header in [
+    ("data_hafalan.csv", "ID_Murid,Nama_Murid,Kelas,Status_Hafalan,Total_Ayat_Lulus,Update_Terakhir,Guru_Pencatat"),
+    ("guru_list.csv", "Nama_Guru"),
+    ("log_hafalan.csv", "Timestamp,ID_Murid,Nama_Murid,Kelas,Surah,Ayat_Dari,Ayat_Sampai,Status,Guru_Pencatat"),
+]:
+    if not os.path.exists(filename):
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(header + "\\n")
+        st.warning(f"File {filename} tidak ditemukan, dibuat otomatis.")
+
 st.set_page_config(
     page_title="Pencatatan Hafalan Juz Amma",
     layout="wide",
@@ -894,3 +905,4 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
