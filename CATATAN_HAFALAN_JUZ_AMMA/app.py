@@ -596,56 +596,94 @@ def page_riwayat_setoran():
 # =============================
 
 def page_laporan_bulanan():
-    st.header("📅 Laporan Bulanan Hafalan")
+    st.header("📅 Laporan Bulanan Hafalan Juz Amma")
 
-    if not os.path.exists(LOG_FILE):
-        st.info("Belum ada data log untuk dianalisis.")
+    if not os.path.exists(DB_FILE):
+        st.info("Belum ada data hafalan yang tersimpan.")
         return
 
-    df_log = pd.read_csv(LOG_FILE)
-    df_log['Timestamp'] = pd.to_datetime(df_log['Timestamp'])
-    df_log['Bulan'] = df_log['Timestamp'].dt.strftime('%Y-%m')  # contoh: 2025-10
+    df = pd.read_csv(DB_FILE)
 
-    # agregasi bulanan per guru per status
-    laporan = (
-        df_log.groupby(['Bulan', 'Guru_Pencatat', 'Status'])
-        .agg(
-            Jumlah_Setoran=('ID_Murid', 'count'),
-            Murid_Unik=('Nama_Murid', 'nunique'),
-        )
-        .reset_index()
-    )
+    if df.empty:
+        st.warning("Database masih kosong.")
+        return
 
-    st.subheader("Ringkasan Bulanan per Guru")
-    st.dataframe(laporan, use_container_width=True)
+    # --- Dapatkan bulan & tahun laporan sekarang ---
+    import calendar
+    today = datetime.now()
+    bulan_text = calendar.month_name[today.month]
+    tahun_text = today.year
+    judul_laporan = f"Laporan Hafalan Juz Amma Bulan {bulan_text} {tahun_text}"
 
-    fig = px.bar(
-        laporan,
-        x='Guru_Pencatat',
-        y='Jumlah_Setoran',
-        color='Status',
-        barmode='group',
-        facet_col='Bulan',
-        title='Jumlah Setoran per Guru per Bulan',
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    st.info("Laporan ini menampilkan rekap per siswa, surah yang sudah dinyatakan *lulus*, dan persentase hafalan terhadap seluruh Juz Amma.")
 
-    # Tombol unduh CSV
-    csv_bytes = laporan.to_csv(index=False).encode('utf-8')
+    hasil_data = []
+    for _, row in df.iterrows():
+        try:
+            status_dict = json.loads(row["Status_Hafalan"])
+        except Exception:
+            continue
+
+        surah_lulus = []
+        total_ayat_lulus = 0
+        for surah, ayat_list in status_dict.items():
+            total_ayat_lulus += ayat_list.count(1)
+            if all(a == 1 for a in ayat_list) and len(ayat_list) > 0:
+                surah_lulus.append(surah)
+
+        persen = round((total_ayat_lulus / TOTAL_AYAT_JUZ_AMMA) * 100, 2)
+
+        hasil_data.append({
+            "NIS": row.get("NIS", ""),
+            "Nama": row["Nama_Murid"],
+            "Kelas": row["Kelas"],
+            "Surah Lulus": ", ".join(surah_lulus) if surah_lulus else "-",
+            "% Hafalan Juz Amma": persen
+        })
+
+    laporan_df = pd.DataFrame(hasil_data)
+    st.dataframe(laporan_df, use_container_width=True)
+
+    # --------------------------
+    # SIMPAN SEBAGAI EXCEL (XLSX)
+    # --------------------------
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        laporan_df.to_excel(writer, sheet_name="Laporan Bulanan", index=False, startrow=2)
+
+        sheet = writer.sheets["Laporan Bulanan"]
+
+        # Tulis judul besar di baris 1
+        sheet["A1"] = judul_laporan
+        sheet["A1"].font = Font(size=14, bold=True)
+        sheet["A1"].alignment = Alignment(horizontal="center")
+
+        # Merge sel judul agar lebar seperti tabel
+        max_col = len(laporan_df.columns)
+        sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_col)
+
+        # Format header tabel
+        for col_cells in sheet.iter_cols(min_row=3, max_row=3):
+            for cell in col_cells:
+                cell.font = Font(bold=True)
+                cell.alignment = Alignment(horizontal="center")
+
+        # Lebarkan kolom otomatis
+        for column_cells in sheet.columns:
+            length = max(len(str(cell.value)) for cell in column_cells)
+            sheet.column_dimensions[column_cells[0].column_letter].width = length + 3
+
+    file_name = f"Laporan_Hafalan_{bulan_text}_{tahun_text}.xlsx"
+
     st.download_button(
-        "📥 Unduh CSV Laporan Bulanan",
-        data=csv_bytes,
-        file_name="laporan_bulanan.csv",
-        mime="text/csv",
-    )
-
-    # Tombol unduh PDF sederhana (teks tabel)
-    pdf_text = laporan.to_string(index=False)
-    st.download_button(
-        "📄 Unduh PDF Sederhana",
-        data=pdf_text.encode('utf-8'),
-        file_name="laporan_bulanan.pdf",
-        mime="application/pdf",
+        label="📥 Unduh Laporan Bulanan (Excel)",
+        data=output.getvalue(),
+        file_name=file_name,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 # =============================
@@ -921,6 +959,7 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
 
