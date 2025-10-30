@@ -765,7 +765,7 @@ def page_laporan_tahunan():
         sheet = writer.sheets["Laporan Bulanan"]
 
         # Tulis judul besar di baris 1
-        sheet["A1"] = judul_laporan
+        sheet["A1"] = f"Laporan Tahunan Hafalan Juz Amma - Tahun {tahun_ini}"
         sheet["A1"].font = Font(size=14, bold=True)
         sheet["A1"].alignment = Alignment(horizontal="center")
 
@@ -1073,6 +1073,7 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
 
 
