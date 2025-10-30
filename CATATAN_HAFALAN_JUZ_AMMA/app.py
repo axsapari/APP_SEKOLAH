@@ -49,30 +49,41 @@ if "df" not in st.session_state:
 
 def load_guru_list(csv_path: str = GURU_FILE):
     """
-    Baca daftar guru dari guru_list.csv. Jika belum ada, buat file contoh otomatis.
-    File harus punya kolom: Nama_Guru
-    Return: list seperti ["Pilih Guru", "Nama Guru A", ...]
+    Membaca daftar guru dari file CSV.
+    Jika file tidak ditemukan atau formatnya tidak sesuai, buat file contoh otomatis.
     """
+    default_guru = [
+        "Agus Sugiharto Sapari, S.Pd.",
+        "Siti Maryam, S.Pd.",
+        "Rahmat Hidayat, S.Pd.I.",
+        "Nisa Khairun, S.Pd.",
+    ]
+
     if not os.path.exists(csv_path):
-        sample_df = pd.DataFrame({
-            "Nama_Guru": [
-                "Agus Sugiharto Sapari, S.Pd.",
-                "Contoh Guru 2, S.Pd.",
-                "Contoh Guru 3, S.Pd.I.",
-            ]
-        })
-        sample_df.to_csv(csv_path, index=False)
+        st.warning(f"File '{csv_path}' tidak ditemukan. Membuat file contoh otomatis.")
+        pd.DataFrame({"Nama_Guru": default_guru}).to_csv(csv_path, index=False)
+        return ["Pilih Guru"] + default_guru
 
     try:
-        df_guru = pd.read_csv(csv_path)
+        # Tambahkan opsi engine dan delimiter fallback
+        try:
+            df_guru = pd.read_csv(csv_path, sep=",", engine="python")
+        except pd.errors.ParserError:
+            df_guru = pd.read_csv(csv_path, sep=";", engine="python")
+        except Exception:
+            # fallback terakhir: coba baca sebagai satu kolom
+            df_guru = pd.read_csv(csv_path, header=None, names=["Nama_Guru"])
+
         if "Nama_Guru" not in df_guru.columns:
-            st.error(f"File {csv_path} tidak memiliki kolom 'Nama_Guru'. Tolong buat kolom itu.")
-            return ["Pilih Guru"]
+            st.warning(f"File '{csv_path}' tidak memiliki kolom 'Nama_Guru'. Menggunakan daftar default.")
+            return ["Pilih Guru"] + default_guru
+
         guru_list = ["Pilih Guru"] + df_guru["Nama_Guru"].dropna().astype(str).tolist()
         return guru_list
+
     except Exception as e:
-        st.error(f"Gagal membaca {csv_path}: {e}")
-        return ["Pilih Guru"]
+        st.error(f"Gagal membaca '{csv_path}': {e}")
+        return ["Pilih Guru"] + default_guru
 
 
 def ensure_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -905,4 +916,5 @@ if __name__ == "__main__":
     if not os.path.exists(DB_FILE):
         initialize_database(DB_FILE)
     main_app()
+
 
