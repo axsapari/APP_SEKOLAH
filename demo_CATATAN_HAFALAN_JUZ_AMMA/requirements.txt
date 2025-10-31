@@ -1,0 +1,14 @@
+# --- Komponen utama aplikasi ---
+streamlit>=1.38.0
+pandas>=2.2.2
+plotly>=5.24.0
+
+# --- Pendukung ekspor file dan PDF sederhana ---
+numpy>=1.26.4
+jinja2>=3.1.4
+
+# --- Opsional (tapi direkomendasikan untuk keamanan data CSV) ---
+openpyxl>=3.1.5
+
+# --- Untuk kompatibilitas JSON dan waktu ---
+python-dateutil>=2.9.0.post0
